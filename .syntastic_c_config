@@ -18,7 +18,6 @@
 -Wcast-align
 -Wwrite-strings
 -Wlogical-op
--Waggregate-return
 -Wstrict-prototypes
 -Wold-style-definition
 -Wmissing-declarations

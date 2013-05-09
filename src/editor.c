@@ -6,6 +6,7 @@
 #include "buffer.h"
 #include "config.h"
 #include "editor.h"
+#include "syntax.h"
 #include "term.h"
 #include "tools.h"
 #include "utf8.h"
@@ -17,9 +18,9 @@ static int desired_cursor_x = 0;
 static void reposition_cursor(bool update_desire)
 {
     term_cursor_pos(term_width - 16, term_height - 2);
+    syntax_region(SYNREG_STATUSBAR);
     int position = printf("%i,%i", active_buffer->y + 1, active_buffer->x + 1);
     printf("%*c", 13 - position, ' ');
-    fflush(stdout);
 
 
     int x = 0;
@@ -37,12 +38,16 @@ static void reposition_cursor(bool update_desire)
     x += 1 + active_buffer->linenr_width + 1;
 
     term_cursor_pos(x, active_buffer->line_screen_pos[active_buffer->y]);
+
+
+    fflush(stdout);
 }
 
 
 static void command_line(void)
 {
     term_cursor_pos(0, term_height - 1);
+    syntax_region(SYNREG_DEFAULT);
     printf("%-*c", term_width - 1, ':');
     fflush(stdout);
     term_cursor_pos(1, term_height - 1);
@@ -86,6 +91,7 @@ static void command_line(void)
             if (bl->buffer->modified)
             {
                 term_cursor_pos(0, term_height - 1);
+                syntax_region(SYNREG_ERROR);
                 printf("%s has been modified.", bl->buffer->name);
                 fflush(stdout);
                 none_modified = false;
@@ -105,6 +111,7 @@ static void command_line(void)
         else
         {
             term_cursor_pos(0, term_height - 1);
+            syntax_region(SYNREG_ERROR);
             printf("%s has been modified.", active_buffer->name);
             fflush(stdout);
         }
@@ -206,17 +213,21 @@ void full_redraw(void)
 
 
     int position = 1;
-    term_underline(true);
+    syntax_region(SYNREG_TABBAR);
     putchar(' ');
 
     for (buffer_list_t *bl = buffer_list; bl != NULL; bl = bl->next)
     {
         buffer_t *buf = bl->buffer;
 
-        term_underline(buf != active_buffer);
-        printf("/ %s%s \\", buf->modified ? "*" : "", buf->name);
+        syntax_region((buf == active_buffer) ? SYNREG_TAB_ACTIVE_OUTER : SYNREG_TAB_INACTIVE_OUTER);
+        putchar('/');
+        syntax_region((buf == active_buffer) ? SYNREG_TAB_ACTIVE_INNER : SYNREG_TAB_INACTIVE_INNER);
+        printf(" %s%s ", buf->modified ? "*" : "", buf->name);
+        syntax_region((buf == active_buffer) ? SYNREG_TAB_ACTIVE_OUTER : SYNREG_TAB_INACTIVE_OUTER);
+        putchar('\\');
 
-        term_underline(true);
+        syntax_region(SYNREG_TABBAR);
         putchar(' ');
 
         position += 2 + buf->modified + utf8_strlen(buf->name) + 3;
@@ -226,7 +237,6 @@ void full_redraw(void)
     int remaining = (16 * term_width - position) % term_width; // FIXME
 
     printf("%*s", remaining, "");
-    term_underline(false);
 
 
     int y_pos = 1, line;
@@ -238,7 +248,9 @@ void full_redraw(void)
         if (new_y_pos > term_height - 2)
             break;
 
+        syntax_region(SYNREG_LINENR);
         printf(" %*i ", active_buffer->linenr_width, line);
+        syntax_region(SYNREG_DEFAULT);
         for (int i = 0; active_buffer->lines[line][i]; i++)
         {
             if (active_buffer->lines[line][i] == '\t')
@@ -257,17 +269,29 @@ void full_redraw(void)
     {
         active_buffer->oll_unused_lines = term_height - 2 - y_pos;
         while (y_pos++ < term_height - 2)
-            printf(" %*i @\n", active_buffer->linenr_width,line);
+        {
+            syntax_region(SYNREG_LINENR);
+            printf(" %*i ", active_buffer->linenr_width,line);
+            syntax_region(SYNREG_PLACEHOLDER_LINE);
+            puts("@");
+        }
     }
     else
     {
         active_buffer->oll_unused_lines = 0;
         while (y_pos++ < term_height - 2)
-            printf(" %*s ~\n", active_buffer->linenr_width, "-");
+        {
+            syntax_region(SYNREG_LINENR);
+            printf(" %*s ", active_buffer->linenr_width, "-");
+            syntax_region(SYNREG_PLACEHOLDER_EMPTY);
+            puts("~");
+        }
     }
 
     active_buffer->ye = line - 1;
 
+
+    syntax_region(SYNREG_STATUSBAR);
 
     printf("%-*s", term_width - 16, active_buffer->location);
     position = printf("%i,%i", active_buffer->y + 1, active_buffer->x + 1);

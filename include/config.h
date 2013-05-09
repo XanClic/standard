@@ -3,4 +3,7 @@
 
 extern int tabstop_width;
 
+
+void load_config(void);
+
 #endif

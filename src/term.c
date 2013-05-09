@@ -61,13 +61,67 @@ void term_init(void)
 
 void term_clear(void)
 {
-    print_flushed("\033[2J\033[H");
+    print("\033[2J\033[H");
 }
 
 
 void term_underline(bool ul)
 {
-    print_flushed(ul ? "\033[4m" : "\033[24m");
+    print(ul ? "\033[4m" : "\033[24m");
+}
+
+
+void term_bold(bool bold)
+{
+    print(bold ? "\033[1m" : "\033[22m");
+}
+
+
+void term_set_color(color_t fg, color_t bg)
+{
+    switch (fg.type)
+    {
+        case COL_DEFAULT:
+            print("\033[22;39m");
+            break;
+
+        case COL_8:
+            printf("\033[3%im", fg.color & 7);
+            break;
+
+        case COL_16:
+            if (fg.color & 8)
+                printf("\033[1;3%im", fg.color & 7);
+            else
+                printf("\033[22;3%im", fg.color & 7);
+            break;
+
+        case COL_256:
+            printf("\033[38;5;%im", fg.color);
+            break;
+
+        case COL_RGB:
+            printf("\033[38;2;%i;%i;%im", fg.r, fg.g, fg.b);
+    }
+
+    switch (bg.type)
+    {
+        case COL_DEFAULT:
+            print("\033[49m");
+            break;
+
+        case COL_8:
+        case COL_16:
+            printf("\033[4%im", bg.color & 7);
+            break;
+
+        case COL_256:
+            printf("\033[48;5;%im", bg.color);
+            break;
+
+        case COL_RGB:
+            printf("\033[48;2;%i;%i;%im", bg.r, bg.g, bg.b);
+    }
 }
 
 
