@@ -7,9 +7,9 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc != 2)
+    if (argc < 2)
     {
-        fprintf(stderr, "Exactly one argument expected.\n");
+        fprintf(stderr, "Argument expected.\n");
         return 1;
     }
 
@@ -17,10 +17,13 @@ int main(int argc, char *argv[])
     term_init();
 
 
-    if (!load_buffer(argv[1]))
+    for (int i = 1; i < argc; i++)
     {
-        fprintf(stderr, "Could not load “%s”.\n", argv[1]);
-        return 1;
+        if (!load_buffer(argv[i]))
+        {
+            fprintf(stderr, "Could not load “%s”.\n", argv[i]);
+            return 1;
+        }
     }
 
 

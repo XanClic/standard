@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "buffer.h"
+#include "editor.h"
 #include "term.h"
 #include "tools.h"
 
@@ -26,8 +27,9 @@ bool load_buffer(const char *file)
     size_t fsz = ftell(fp);
     rewind(fp);
 
-    char *content = malloc(fsz);
+    char *content = malloc(fsz + 1);
     fread(content, 1, fsz, fp);
+    content[fsz] = 0;
 
     fclose(fp);
 
@@ -36,8 +38,9 @@ bool load_buffer(const char *file)
 
     buf->location = strdup(file);
     buf->x = buf->y = buf->ys = 0;
+    buf->modified = false;
 
-    buf->line_count = 0;
+    buf->line_count = 1;
     for (int i = 0; content[i]; i++)
         if (content[i] == '\n')
             buf->line_count++;
@@ -45,6 +48,7 @@ bool load_buffer(const char *file)
     buf->linenr_width = get_decimal_length(buf->line_count);
 
     buf->lines = malloc(buf->line_count * sizeof(*buf->lines));
+    buf->line_screen_pos = malloc(buf->line_count * sizeof(*buf->line_screen_pos));
 
     char *content_pos = content;
     for (int i = 0; content_pos; i++)
@@ -65,17 +69,16 @@ bool load_buffer(const char *file)
     buf->name = malloc(strlen(buf->location) + 1);
     for (int i = 0, oi = 0; buf->location[i]; i++)
     {
-        if (strchr(&buf->location[i], '/'))
+        char *slash = strchr(&buf->location[i], '/');
+        if (slash)
         {
             buf->name[oi++] = buf->location[i];
-            if (i)
+            if ((i = slash - buf->location))
                 buf->name[oi++] = '/';
-
-            i = strchr(&buf->location[i], '/') - buf->location;
         }
         else
         {
-            strcat(&buf->name[oi], &buf->location[i]);
+            strcpy(&buf->name[oi], &buf->location[i]);
             break;
         }
     }
@@ -90,6 +93,8 @@ bool load_buffer(const char *file)
 
 void buffer_destroy(buffer_t *buf)
 {
+    bool active_buffer_changed = false;
+
     buffer_list_t **blp;
     for (blp = &buffer_list; (*blp != NULL) && ((*blp)->buffer != buf); blp = &(*blp)->next);
 
@@ -105,9 +110,16 @@ void buffer_destroy(buffer_t *buf)
                 active_buffer = blp_next->buffer;
             else
             {
-                // FIXME
-                active_buffer = *(buffer_t **)((uintptr_t)blp - offsetof(buffer_list_t, next) + offsetof(buffer_list_t, buffer));
+                if (blp == &buffer_list)
+                    exit(0); // No active buffer remaining
+                else
+                {
+                    // FIXME
+                    active_buffer = *(buffer_t **)((uintptr_t)blp - offsetof(buffer_list_t, next) + offsetof(buffer_list_t, buffer));
+                }
             }
+
+            active_buffer_changed = true;
         }
     }
 
@@ -118,8 +130,13 @@ void buffer_destroy(buffer_t *buf)
     for (int i = 0; i < buf->line_count; i++)
         free(buf->lines[i]);
     free(buf->lines);
+    free(buf->line_screen_pos);
 
     free(buf);
+
+
+    if (active_buffer_changed)
+        update_active_buffer();
 }
 
 
@@ -138,4 +155,29 @@ void buffer_list_append(buffer_t *buf)
 
     if (!active_buffer)
         active_buffer = buf;
+}
+
+
+void buffer_activate_next(void)
+{
+    buffer_list_t *bl;
+    for (bl = buffer_list; (bl != NULL) && (bl->buffer != active_buffer); bl = bl->next);
+
+    if ((bl != NULL) && (bl->next != NULL))
+        active_buffer = bl->next->buffer;
+    else
+        active_buffer = buffer_list->buffer;
+
+    update_active_buffer();
+}
+
+
+void buffer_activate_prev(void)
+{
+    buffer_list_t *bl;
+    for (bl = buffer_list; (bl->next != NULL) && (bl->next->buffer != active_buffer); bl = bl->next);
+
+    active_buffer = bl->buffer;
+
+    update_active_buffer();
 }

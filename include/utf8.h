@@ -5,5 +5,6 @@
 
 
 size_t utf8_strlen(const char *str);
+int utf8_mbclen(char start_chr);
 
 #endif
