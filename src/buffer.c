@@ -9,6 +9,7 @@
 #include "editor.h"
 #include "term.h"
 #include "tools.h"
+#include "utf8.h"
 
 
 buffer_list_t *buffer_list = NULL;
@@ -137,6 +138,68 @@ void buffer_destroy(buffer_t *buf)
 
     if (active_buffer_changed)
         update_active_buffer();
+}
+
+
+// Returns the byte offset in the current line (as opposed to active_buffer->x, which is the character offset)
+static int get_active_line_byte_offset(void)
+{
+    int i, j;
+    for (i = j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++);
+    return i;
+}
+
+
+static void ensure_line_size(char **lineptr, size_t len)
+{
+    *lineptr = realloc(*lineptr, len + 1);
+}
+
+
+void buffer_insert(buffer_t *buf, const char *string)
+{
+    buf->modified = true;
+
+    int ofs = get_active_line_byte_offset();
+
+    size_t line_len = strlen(active_buffer->lines[active_buffer->y]);
+
+    const char *nl = strchr(string, '\n');
+    if (!nl)
+    {
+        size_t str_len = strlen(string);
+
+        ensure_line_size(&active_buffer->lines[active_buffer->y], line_len + str_len);
+        memmove(&active_buffer->lines[active_buffer->y][ofs + str_len], &active_buffer->lines[active_buffer->y][ofs], line_len - ofs + 1);
+        memcpy(&active_buffer->lines[active_buffer->y][ofs], string, str_len);
+
+        active_buffer->x += utf8_strlen(string);
+
+        return;
+    }
+
+
+    size_t str_len = nl - string;
+
+    active_buffer->lines = realloc(active_buffer->lines, ++active_buffer->line_count * sizeof(*active_buffer->lines));
+
+    memmove(&active_buffer->lines[active_buffer->y + 2], &active_buffer->lines[active_buffer->y + 1], (active_buffer->line_count - active_buffer->y - 2) * sizeof(*active_buffer->lines));
+
+    active_buffer->lines[active_buffer->y + 1] = malloc(line_len - ofs + 1);
+
+    strcpy(active_buffer->lines[active_buffer->y + 1], &active_buffer->lines[active_buffer->y][ofs]);
+
+    ensure_line_size(&active_buffer->lines[active_buffer->y], ofs + str_len + 1);
+    memcpy(&active_buffer->lines[active_buffer->y][ofs], string, str_len);
+    active_buffer->lines[active_buffer->y][ofs + str_len] = 0;
+
+
+    active_buffer->x = 0;
+    active_buffer->y++;
+
+
+    if (nl[1])
+        buffer_insert(buf, nl + 1);
 }
 
 
