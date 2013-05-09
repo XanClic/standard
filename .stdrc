@@ -1,0 +1,15 @@
+$tabstop = 8
+
+hi error bold
+
+hi tabbar underline
+hi tab_active_inner bold
+hi tab_active_outer bold
+hi tab_inactive_inner underline
+hi tab_inactive_outer underline
+
+hi linenr bold
+hi statusbar bold
+
+hi placeholder_empty termfg: 4
+hi placeholder_line termfg: 3

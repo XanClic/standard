@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "buffer.h"
+#include "config.h"
 #include "editor.h"
 #include "term.h"
 
@@ -15,6 +16,8 @@ int main(int argc, char *argv[])
 
 
     term_init();
+
+    load_config();
 
 
     for (int i = 1; i < argc; i++)
