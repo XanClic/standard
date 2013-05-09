@@ -25,7 +25,7 @@ static enum
 } input_mode = MODE_NORMAL;
 
 
-static void reposition_cursor(bool update_desire)
+void reposition_cursor(bool update_desire)
 {
     term_cursor_pos(term_width - 16, term_height - 2);
     syntax_region(SYNREG_STATUSBAR);
@@ -37,7 +37,7 @@ static void reposition_cursor(bool update_desire)
     for (int i = 0, j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
         if (active_buffer->lines[active_buffer->y][i] == '\t')
-            x += tabstop_width;
+            x += tabstop_width - x % tabstop_width;
         else
             x++;
     }
@@ -150,12 +150,12 @@ static void line_change_update_x(void)
     for (; active_buffer->lines[active_buffer->y][i] && (x < desired_cursor_x); i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
         if (active_buffer->lines[active_buffer->y][i] == '\t')
-            x += tabstop_width;
+            x += tabstop_width - x % tabstop_width;
         else
             x++;
     }
 
-    if (desired_cursor_x == x)
+    if ((desired_cursor_x == x) || (input_mode == MODE_INSERT))
         active_buffer->x = j;
     else
         active_buffer->x = j ? (j - 1) : 0;
@@ -199,6 +199,65 @@ static int read_escape_sequence(void)
 }
 
 
+static void draw_line(buffer_t *buffer, int line)
+{
+    syntax_region(SYNREG_LINENR);
+    printf(" %*i ", buffer->linenr_width, line);
+
+    int x = 0;
+
+    syntax_region(SYNREG_DEFAULT);
+    for (int i = 0; active_buffer->lines[line][i]; i++)
+    {
+        if (buffer->lines[line][i] == '\t')
+        {
+            printf("%*c", tabstop_width - x % tabstop_width, ' ');
+            x += tabstop_width - x % tabstop_width;
+        }
+        else
+        {
+            putchar(buffer->lines[line][i]);
+            if ((buffer->lines[line][i] & 0xc0) != 0x80)
+                x++;
+        }
+    }
+    putchar('\n');
+}
+
+
+static void write_string(const char *s)
+{
+    bool old_modified = active_buffer->modified;
+
+    int old_slr = slr(active_buffer, active_buffer->y);
+    int old_lc = active_buffer->line_count;
+
+    buffer_insert(active_buffer, s);
+
+    int new_slr = slr(active_buffer, active_buffer->y);
+
+    if (!old_modified || (old_lc != active_buffer->line_count) || (old_slr != new_slr))
+    {
+        full_redraw();
+
+        while (active_buffer->y > active_buffer->ye)
+        {
+            int screen_lines_required = new_slr - active_buffer->oll_unused_lines;
+            while (screen_lines_required > 0)
+                screen_lines_required -= slr(active_buffer, active_buffer->ys++);
+            full_redraw();
+        }
+    }
+    else
+    {
+        term_cursor_pos(0, active_buffer->line_screen_pos[active_buffer->y]);
+        draw_line(active_buffer, active_buffer->y);
+    }
+
+    reposition_cursor(true);
+}
+
+
 void editor(void)
 {
     full_redraw();
@@ -222,7 +281,50 @@ void editor(void)
                 case 'l': inp = KEY_RIGHT; break;
                 case 'j': inp = KEY_DOWN;  break;
                 case 'k': inp = KEY_UP;    break;
+
+                case 127: inp = KEY_LEFT;  break;
+
+                case 'a':
+                    // Advancing is always possible, except for when the line is empty
+                    if (active_buffer->lines[active_buffer->y][0])
+                        active_buffer->x++;
+                case 'i':
+                    input_mode = MODE_INSERT;
+                    term_cursor_pos(0, term_height - 1);
+                    syntax_region(SYNREG_MODEBAR);
+                    print("--- INSERT ---");
+                    reposition_cursor(false);
+                    break;
             }
+        }
+        else if (inp == '\e')
+        {
+            term_cursor_pos(0, term_height - 1);
+            printf("%-*c", term_width - 2, ' ');
+
+            if ((input_mode == MODE_INSERT) && (active_buffer->x > 0))
+                active_buffer->x--;
+
+            input_mode = MODE_NORMAL;
+
+            reposition_cursor(desired_cursor_x >= 0);
+        }
+        else if ((input_mode == MODE_INSERT) && (inp > 0) && (inp < 256))
+        {
+            char full_mbc[5] = { inp };
+            if (inp & 0x80)
+            {
+                int expected = utf8_mbclen(inp);
+
+                if (expected)
+                {
+                    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+                    read(STDIN_FILENO, full_mbc, expected - 1);
+                    fcntl(STDIN_FILENO, F_SETFL, 0);
+                }
+            }
+
+            write_string(full_mbc);
         }
 
         switch (inp)
@@ -234,7 +336,7 @@ void editor(void)
                 break;
 
             case KEY_RIGHT:
-                if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - 1)
+                if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - (input_mode != MODE_INSERT))
                     active_buffer->x++;
                 reposition_cursor(true);
                 break;
@@ -321,17 +423,7 @@ void full_redraw(void)
         if (new_y_pos > term_height - 2)
             break;
 
-        syntax_region(SYNREG_LINENR);
-        printf(" %*i ", active_buffer->linenr_width, line);
-        syntax_region(SYNREG_DEFAULT);
-        for (int i = 0; active_buffer->lines[line][i]; i++)
-        {
-            if (active_buffer->lines[line][i] == '\t')
-                printf("%*c", tabstop_width, ' ');
-            else
-                putchar(active_buffer->lines[line][i]);
-        }
-        putchar('\n');
+        draw_line(active_buffer, line);
 
         active_buffer->line_screen_pos[line] = y_pos;
 
@@ -386,6 +478,7 @@ void full_redraw(void)
 
     if (input_mode != MODE_NORMAL)
     {
+        syntax_region(SYNREG_MODEBAR);
         if (input_mode == MODE_INSERT)
             print("--- INSERT ---");
         else if (input_mode == MODE_REPLACE)

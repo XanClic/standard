@@ -1,6 +1,6 @@
 $tabstop = 8
 
-hi error bold
+hi error bold, termbg: 1
 
 hi tabbar underline
 hi tab_active_inner bold

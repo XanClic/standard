@@ -44,6 +44,8 @@ extern buffer_t *active_buffer;
 bool load_buffer(const char *file);
 void buffer_destroy(buffer_t *buf);
 
+void buffer_insert(buffer_t *buf, const char *string);
+
 void buffer_list_append(buffer_t *buf);
 
 void buffer_activate_next(void);
