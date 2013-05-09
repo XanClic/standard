@@ -1,11 +1,14 @@
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "buffer.h"
 #include "config.h"
 #include "editor.h"
+#include "keycodes.h"
 #include "syntax.h"
 #include "term.h"
 #include "tools.h"
@@ -13,6 +16,13 @@
 
 
 static int desired_cursor_x = 0;
+
+static enum
+{
+    MODE_NORMAL,
+    MODE_INSERT,
+    MODE_REPLACE
+} input_mode = MODE_NORMAL;
 
 
 static void reposition_cursor(bool update_desire)
@@ -128,6 +138,14 @@ static void command_line(void)
 
 static void line_change_update_x(void)
 {
+    if (desired_cursor_x == -1)
+    {
+        int len = (int)utf8_strlen(active_buffer->lines[active_buffer->y]);
+        active_buffer->x = len ? (len - 1) : 0;
+        return;
+    }
+
+
     int x = 0, i = 0, j = 0;
     for (; active_buffer->lines[active_buffer->y][i] && (x < desired_cursor_x); i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
@@ -151,6 +169,36 @@ static int slr(buffer_t *buf, int line)
 }
 
 
+// escape sequence translation table 1; TT for '\e[A' etc.
+static int eseq_tt1[26] = {
+    ['A' - 'A'] = KEY_UP,
+    ['B' - 'A'] = KEY_DOWN,
+    ['C' - 'A'] = KEY_RIGHT,
+    ['D' - 'A'] = KEY_LEFT,
+    ['F' - 'A'] = KEY_END,
+    ['H' - 'A'] = KEY_HOME
+};
+
+
+static int read_escape_sequence(void)
+{
+    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+    char escape_sequence[8];
+    int eseq_len = read(STDIN_FILENO, escape_sequence, 7);
+    fcntl(STDIN_FILENO, F_SETFL, 0);
+
+    if (eseq_len <= 0)
+        return '\e';
+
+    escape_sequence[eseq_len] = 0;
+
+    if ((escape_sequence[0] == '[') && (escape_sequence[1] >= 'A') && (escape_sequence[1] <= 'Z'))
+        return eseq_tt1[escape_sequence[1] - 'A'];
+
+    return 0;
+}
+
+
 void editor(void)
 {
     full_redraw();
@@ -159,25 +207,39 @@ void editor(void)
     {
         int inp = getchar();
 
+        if (inp == '\e')
+            inp = read_escape_sequence();
+
+        if (input_mode == MODE_NORMAL)
+        {
+            switch (inp)
+            {
+                case ':':
+                    command_line();
+                    break;
+
+                case 'h': inp = KEY_LEFT;  break;
+                case 'l': inp = KEY_RIGHT; break;
+                case 'j': inp = KEY_DOWN;  break;
+                case 'k': inp = KEY_UP;    break;
+            }
+        }
+
         switch (inp)
         {
-            case ':':
-                command_line();
-                break;
-
-            case 'h':
+            case KEY_LEFT:
                 if (active_buffer->x)
                     active_buffer->x--;
                 reposition_cursor(true);
                 break;
 
-            case 'l':
+            case KEY_RIGHT:
                 if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - 1)
                     active_buffer->x++;
                 reposition_cursor(true);
                 break;
 
-            case 'j':
+            case KEY_DOWN:
                 if (active_buffer->y < active_buffer->line_count - 1)
                     active_buffer->y++;
                 if (active_buffer->y > active_buffer->ye)
@@ -191,7 +253,7 @@ void editor(void)
                 reposition_cursor(false);
                 break;
 
-            case 'k':
+            case KEY_UP:
                 if (active_buffer->y > 0)
                     active_buffer->y--;
                 line_change_update_x();
@@ -201,6 +263,17 @@ void editor(void)
                     full_redraw();
                 }
                 reposition_cursor(false);
+                break;
+
+            case KEY_END:
+                desired_cursor_x = -1;
+                line_change_update_x();
+                reposition_cursor(false);
+                break;
+
+            case KEY_HOME:
+                active_buffer->x = 0;
+                reposition_cursor(true);
                 break;
         }
     }
@@ -309,6 +382,15 @@ void full_redraw(void)
         print("Bot");
     else
         printf("%2i%%", (active_buffer->ys * 100) / (active_buffer->line_count - line + active_buffer->ys));
+
+
+    if (input_mode != MODE_NORMAL)
+    {
+        if (input_mode == MODE_INSERT)
+            print("--- INSERT ---");
+        else if (input_mode == MODE_REPLACE)
+            print("--- REPLACE ---");
+    }
 
 
     reposition_cursor(false);
