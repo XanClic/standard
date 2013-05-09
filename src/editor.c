@@ -1,19 +1,202 @@
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "buffer.h"
+#include "config.h"
 #include "editor.h"
 #include "term.h"
 #include "tools.h"
 #include "utf8.h"
 
 
+static int desired_cursor_x = 0;
+
+
+static void reposition_cursor(bool update_desire)
+{
+    term_cursor_pos(term_width - 16, term_height - 2);
+    int position = printf("%i,%i", active_buffer->y + 1, active_buffer->x + 1);
+    printf("%*c", 13 - position, ' ');
+    fflush(stdout);
+
+
+    int x = 0;
+    for (int i = 0, j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
+    {
+        if (active_buffer->lines[active_buffer->y][i] == '\t')
+            x += tabstop_width;
+        else
+            x++;
+    }
+
+    if (update_desire)
+        desired_cursor_x = x;
+
+    x += 1 + active_buffer->linenr_width + 1;
+
+    term_cursor_pos(x, active_buffer->line_screen_pos[active_buffer->y]);
+}
+
+
+static void command_line(void)
+{
+    term_cursor_pos(0, term_height - 1);
+    printf("%-*c", term_width - 1, ':');
+    fflush(stdout);
+    term_cursor_pos(1, term_height - 1);
+
+    char cmd[128];
+
+    int i = 0;
+    while ((i < 127) && ((cmd[i++] = getchar()) != '\n'))
+    {
+        if ((cmd[i - 1] == ':') && (i == 1))
+            cmd[--i] = 0;
+        else if (cmd[i - 1] == 127)
+        {
+            print_flushed("\b \b");
+
+            cmd[--i] = 0;
+            if (i)
+                cmd[--i] = 0;
+            else
+                break;
+        }
+        else
+        {
+            putchar(cmd[i - 1]);
+            fflush(stdout);
+        }
+    }
+
+    if (i)
+        cmd[--i] = 0;
+
+
+    if (!strcmp(cmd, "qa!"))
+        exit(0);
+    else if (!strcmp(cmd, "qa"))
+    {
+        bool none_modified = true;
+
+        for (buffer_list_t *bl = buffer_list; bl != NULL; bl = bl->next)
+        {
+            if (bl->buffer->modified)
+            {
+                term_cursor_pos(0, term_height - 1);
+                printf("%s has been modified.", bl->buffer->name);
+                fflush(stdout);
+                none_modified = false;
+                break;
+            }
+        }
+
+        if (none_modified)
+            exit(0);
+    }
+    else if (!strcmp(cmd, "q!"))
+        buffer_destroy(active_buffer);
+    else if (!strcmp(cmd, "q"))
+    {
+        if (!active_buffer->modified)
+            buffer_destroy(active_buffer);
+        else
+        {
+            term_cursor_pos(0, term_height - 1);
+            printf("%s has been modified.", active_buffer->name);
+            fflush(stdout);
+        }
+    }
+    else if (!strcmp(cmd, "tabnext"))
+        buffer_activate_next();
+    else if (!strcmp(cmd, "tabprevious"))
+        buffer_activate_prev();
+
+
+    reposition_cursor(false);
+}
+
+
+static void line_change_update_x(void)
+{
+    int x = 0, i = 0, j = 0;
+    for (; active_buffer->lines[active_buffer->y][i] && (x < desired_cursor_x); i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
+    {
+        if (active_buffer->lines[active_buffer->y][i] == '\t')
+            x += tabstop_width;
+        else
+            x++;
+    }
+
+    if (desired_cursor_x == x)
+        active_buffer->x = j;
+    else
+        active_buffer->x = j ? (j - 1) : 0;
+}
+
+
+// Screen lines required
+static int slr(buffer_t *buf, int line)
+{
+    return (1 + buf->linenr_width + 1 + utf8_strlen(buf->lines[line]) + buffer_width - 1) / buffer_width;
+}
+
+
 void editor(void)
 {
     full_redraw();
 
-    sleep(3);
+    for (;;)
+    {
+        int inp = getchar();
+
+        switch (inp)
+        {
+            case ':':
+                command_line();
+                break;
+
+            case 'h':
+                if (active_buffer->x)
+                    active_buffer->x--;
+                reposition_cursor(true);
+                break;
+
+            case 'l':
+                if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - 1)
+                    active_buffer->x++;
+                reposition_cursor(true);
+                break;
+
+            case 'j':
+                if (active_buffer->y < active_buffer->line_count - 1)
+                    active_buffer->y++;
+                if (active_buffer->y > active_buffer->ye)
+                {
+                    int screen_lines_required = slr(active_buffer, active_buffer->y) - active_buffer->oll_unused_lines;
+                    while (screen_lines_required > 0)
+                        screen_lines_required -= slr(active_buffer, active_buffer->ys++);
+                    full_redraw();
+                }
+                line_change_update_x();
+                reposition_cursor(false);
+                break;
+
+            case 'k':
+                if (active_buffer->y > 0)
+                    active_buffer->y--;
+                line_change_update_x();
+                if (active_buffer->y < active_buffer->ys)
+                {
+                    active_buffer->ys = active_buffer->y;
+                    full_redraw();
+                }
+                reposition_cursor(false);
+                break;
+        }
+    }
 }
 
 
@@ -31,33 +214,63 @@ void full_redraw(void)
         buffer_t *buf = bl->buffer;
 
         term_underline(buf != active_buffer);
-        printf("/ %s \\", buf->name);
+        printf("/ %s%s \\", buf->modified ? "*" : "", buf->name);
 
-        position += 2 + utf8_strlen(buf->name) + 2;
+        term_underline(true);
+        putchar(' ');
+
+        position += 2 + buf->modified + utf8_strlen(buf->name) + 3;
     }
 
 
     int remaining = (16 * term_width - position) % term_width; // FIXME
 
-    term_underline(true);
     printf("%*s", remaining, "");
     term_underline(false);
 
 
     int y_pos = 1, line;
 
-    for (line = active_buffer->ys; (y_pos < term_height - 2) && (line < active_buffer->line_count); line++)
+    for (line = active_buffer->ys; line < active_buffer->line_count; line++)
     {
-        printf(" %*i %s\n", active_buffer->linenr_width, line, active_buffer->lines[line]);
-        y_pos += (utf8_strlen(active_buffer->lines[line]) + 1 + active_buffer->linenr_width + 1 + term_width - 1) / term_width;
+        int new_y_pos = y_pos + slr(active_buffer, line);
+
+        if (new_y_pos > term_height - 2)
+            break;
+
+        printf(" %*i ", active_buffer->linenr_width, line);
+        for (int i = 0; active_buffer->lines[line][i]; i++)
+        {
+            if (active_buffer->lines[line][i] == '\t')
+                printf("%*c", tabstop_width, ' ');
+            else
+                putchar(active_buffer->lines[line][i]);
+        }
+        putchar('\n');
+
+        active_buffer->line_screen_pos[line] = y_pos;
+
+        y_pos = new_y_pos;
     }
 
-    while (y_pos++ < term_height - 2)
-        printf(" %*s ~\n", active_buffer->linenr_width, "-");
+    if (line < active_buffer->line_count)
+    {
+        active_buffer->oll_unused_lines = term_height - 2 - y_pos;
+        while (y_pos++ < term_height - 2)
+            printf(" %*i @\n", active_buffer->linenr_width,line);
+    }
+    else
+    {
+        active_buffer->oll_unused_lines = 0;
+        while (y_pos++ < term_height - 2)
+            printf(" %*s ~\n", active_buffer->linenr_width, "-");
+    }
+
+    active_buffer->ye = line - 1;
 
 
     printf("%-*s", term_width - 16, active_buffer->location);
-    position = printf("%i,%i", active_buffer->x, active_buffer->y);
+    position = printf("%i,%i", active_buffer->y + 1, active_buffer->x + 1);
 
     printf("%*c", 13 - position, ' ');
 
@@ -74,5 +287,13 @@ void full_redraw(void)
         printf("%2i%%", (active_buffer->ys * 100) / (active_buffer->line_count - line + active_buffer->ys));
 
 
-    term_cursor_pos(1 + active_buffer->linenr_width + 1 + active_buffer->x, 1 + active_buffer->y - active_buffer->ys);
+    reposition_cursor(false);
+}
+
+
+void update_active_buffer(void)
+{
+    full_redraw();
+
+    desired_cursor_x = active_buffer->x;
 }

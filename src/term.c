@@ -24,6 +24,17 @@ void print_flushed(const char *s)
 }
 
 
+static struct termios initial_tios;
+
+
+static void term_release(void)
+{
+    term_clear();
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &initial_tios);
+}
+
+
 void term_init(void)
 {
     struct winsize ws;
@@ -32,7 +43,19 @@ void term_init(void)
     term_width  = ws.ws_col;
     term_height = ws.ws_row;
 
-    atexit(term_clear);
+    atexit(term_release);
+
+    tcgetattr(STDIN_FILENO, &initial_tios);
+
+    struct termios tios;
+    memcpy(&tios, &initial_tios, sizeof(tios));
+    tios.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL | ICANON);
+    tios.c_cc[VTIME] = 1;
+    tios.c_cc[VMIN] = 1;
+    tcsetattr(STDIN_FILENO, TCSANOW, &tios);
+
+    setbuf(stdin, NULL);
+    setvbuf(stdout, NULL, _IOFBF, 0);
 }
 
 

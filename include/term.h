@@ -6,6 +6,9 @@
 
 extern int term_width, term_height;
 
+#define buffer_width  (term_width)
+#define buffer_height (term_height - 3)
+
 
 void term_init(void);
 
