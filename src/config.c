@@ -32,7 +32,8 @@ static const char *syntax_names[SYNREG_COUNT] = {
     "linenr",
     "placeholder_empty",
     "placeholder_line",
-    "statusbar"
+    "statusbar",
+    "modebar"
 };
 
 
