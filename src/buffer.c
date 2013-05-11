@@ -16,6 +16,27 @@ buffer_list_t *buffer_list = NULL;
 buffer_t *active_buffer = NULL;
 
 
+static void update_buffer_name(buffer_t *buf)
+{
+    buf->name = malloc(strlen(buf->location) + 1);
+    for (int i = 0, oi = 0; buf->location[i]; i++)
+    {
+        char *slash = strchr(&buf->location[i], '/');
+        if (slash)
+        {
+            buf->name[oi++] = buf->location[i];
+            if ((i = slash - buf->location))
+                buf->name[oi++] = '/';
+        }
+        else
+        {
+            strcpy(&buf->name[oi], &buf->location[i]);
+            break;
+        }
+    }
+}
+
+
 bool load_buffer(const char *file)
 {
     FILE *fp = fopen(file, "r");
@@ -67,26 +88,49 @@ bool load_buffer(const char *file)
     }
 
 
-    buf->name = malloc(strlen(buf->location) + 1);
-    for (int i = 0, oi = 0; buf->location[i]; i++)
-    {
-        char *slash = strchr(&buf->location[i], '/');
-        if (slash)
-        {
-            buf->name[oi++] = buf->location[i];
-            if ((i = slash - buf->location))
-                buf->name[oi++] = '/';
-        }
-        else
-        {
-            strcpy(&buf->name[oi], &buf->location[i]);
-            break;
-        }
-    }
+    update_buffer_name(buf);
 
 
     buffer_list_append(buf);
 
+
+    return true;
+}
+
+
+bool buffer_write(buffer_t *buf, const char *target)
+{
+    const char *fname = target ? target : buf->location;
+
+    if (!fname)
+        return false;
+
+    FILE *fp = fopen(fname, "w");
+    if (fp == NULL)
+        return false;
+
+    for (int i = 0; i < buf->line_count; i++)
+    {
+        fputs(buf->lines[i], fp);
+        if (i < buf->line_count - 1)
+            fputc('\n', fp);
+    }
+
+    fclose(fp);
+
+    if (target)
+    {
+        free(buf->location);
+        buf->location = strdup(target);
+
+        update_buffer_name(buf);
+    }
+
+    if (buf->modified)
+    {
+        buf->modified = false;
+        full_redraw();
+    }
 
     return true;
 }

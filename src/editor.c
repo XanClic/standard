@@ -1,4 +1,6 @@
+#include <ctype.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +8,7 @@
 #include <unistd.h>
 
 #include "buffer.h"
+#include "commands.h"
 #include "config.h"
 #include "editor.h"
 #include "keycodes.h"
@@ -54,6 +57,71 @@ void reposition_cursor(bool update_desire)
 }
 
 
+void error(const char *format, ...)
+{
+    term_cursor_pos(0, term_height - 1);
+    syntax_region(SYNREG_ERROR);
+
+    va_list va;
+    va_start(va, format);
+    vprintf(format, va);
+    va_end(va);
+
+    reposition_cursor(false);
+}
+
+
+static char *cmdtok(char *s)
+{
+    static char *saved;
+
+    if (s != NULL)
+        saved = s;
+
+    if (saved == NULL)
+        return NULL;
+
+    s = saved;
+
+    while (!isspace(*saved) && *saved)
+    {
+        if (*saved == '\\')
+        {
+            if (!*(++saved))
+                break;
+        }
+        if (*saved == '"')
+        {
+            saved++;
+            while ((*saved != '"') && *saved)
+                saved++;
+            if (!*saved)
+                break;
+        }
+        if (*saved == '\'')
+        {
+            saved++;
+            while ((*saved != '\'') && *saved)
+                saved++;
+            if (!*saved)
+                break;
+        }
+        saved++;
+    }
+
+    if (isspace(*saved))
+    {
+        *saved = 0;
+        while (isspace(*++saved));
+    }
+
+    if (!*saved)
+        saved = NULL;
+
+    return s;
+}
+
+
 static void command_line(void)
 {
     term_cursor_pos(0, term_height - 1);
@@ -90,46 +158,25 @@ static void command_line(void)
         cmd[--i] = 0;
 
 
-    if (!strcmp(cmd, "qa!"))
-        exit(0);
-    else if (!strcmp(cmd, "qa"))
-    {
-        bool none_modified = true;
+    // FIXME
+    char *cmd_line[32];
 
-        for (buffer_list_t *bl = buffer_list; bl != NULL; bl = bl->next)
-        {
-            if (bl->buffer->modified)
-            {
-                term_cursor_pos(0, term_height - 1);
-                syntax_region(SYNREG_ERROR);
-                printf("%s has been modified.", bl->buffer->name);
-                fflush(stdout);
-                none_modified = false;
-                break;
-            }
-        }
+    cmd_line[0] = cmdtok(cmd);
+    for (int j = 0; cmd_line[j]; j++)
+        cmd_line[j + 1] = cmdtok(NULL);
 
-        if (none_modified)
-            exit(0);
-    }
-    else if (!strcmp(cmd, "q!"))
-        buffer_destroy(active_buffer);
-    else if (!strcmp(cmd, "q"))
+
+    for (i = 0; command_handlers[i].cmd && strcmp(command_handlers[i].cmd, cmd_line[0]); i++);
+
+    if (command_handlers[i].cmd)
+        command_handlers[i].execute(cmd_line);
+    else
     {
-        if (!active_buffer->modified)
-            buffer_destroy(active_buffer);
-        else
-        {
-            term_cursor_pos(0, term_height - 1);
-            syntax_region(SYNREG_ERROR);
-            printf("%s has been modified.", active_buffer->name);
-            fflush(stdout);
-        }
+        term_cursor_pos(0, term_height - 1);
+        syntax_region(SYNREG_ERROR);
+        printf("Unknown command “%s”.", cmd_line[0]);
+        fflush(stdout);
     }
-    else if (!strcmp(cmd, "tabnext"))
-        buffer_activate_next();
-    else if (!strcmp(cmd, "tabprevious"))
-        buffer_activate_prev();
 
 
     reposition_cursor(false);
