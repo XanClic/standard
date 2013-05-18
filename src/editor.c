@@ -239,8 +239,14 @@ static int read_escape_sequence(void)
 
     escape_sequence[eseq_len] = 0;
 
-    if ((escape_sequence[0] == '[') && (escape_sequence[1] >= 'A') && (escape_sequence[1] <= 'Z'))
-        return eseq_tt1[escape_sequence[1] - 'A'];
+    if (escape_sequence[0] == '[')
+    {
+        if ((escape_sequence[1] >= 'A') && (escape_sequence[1] <= 'Z'))
+            return eseq_tt1[escape_sequence[1] - 'A'];
+
+        if ((escape_sequence[1] == '3') && (escape_sequence[2] == '~'))
+            return KEY_DELETE;
+    }
 
     return 0;
 }
@@ -268,7 +274,8 @@ static void draw_line(buffer_t *buffer, int line)
                 x++;
         }
     }
-    putchar('\n');
+
+    printf("%*s\n", buffer_width - x - buffer->linenr_width - 2, "");
 }
 
 
@@ -305,6 +312,29 @@ static void write_string(const char *s)
 }
 
 
+static void delete_chars(int count)
+{
+    bool old_modified = active_buffer->modified;
+
+    int old_slr = slr(active_buffer, active_buffer->y);
+    int old_lc = active_buffer->line_count;
+
+    buffer_delete(active_buffer, count);
+
+    int new_slr = slr(active_buffer, active_buffer->y);
+
+    if (!old_modified || (old_lc != active_buffer->line_count) || (old_slr != new_slr))
+        full_redraw();
+    else
+    {
+        term_cursor_pos(0, active_buffer->line_screen_pos[active_buffer->y]);
+        draw_line(active_buffer, active_buffer->y);
+    }
+
+    reposition_cursor(true);
+}
+
+
 void editor(void)
 {
     full_redraw();
@@ -324,12 +354,14 @@ void editor(void)
                     command_line();
                     break;
 
-                case 'h': inp = KEY_LEFT;  break;
-                case 'l': inp = KEY_RIGHT; break;
-                case 'j': inp = KEY_DOWN;  break;
-                case 'k': inp = KEY_UP;    break;
+                case 'h': inp = KEY_LEFT;   break;
+                case 'l': inp = KEY_RIGHT;  break;
+                case 'j': inp = KEY_DOWN;   break;
+                case 'k': inp = KEY_UP;     break;
 
-                case 127: inp = KEY_LEFT;  break;
+                case 127: inp = KEY_LEFT;   break;
+
+                case 'x': inp = KEY_DELETE; break;
 
                 case 'a':
                     // Advancing is always possible, except for when the line is empty
@@ -424,6 +456,10 @@ void editor(void)
                 active_buffer->x = 0;
                 reposition_cursor(true);
                 break;
+
+            case KEY_DELETE:
+                delete_chars(1);
+                break;
         }
     }
 }
@@ -458,7 +494,7 @@ void full_redraw(void)
 
     int remaining = (16 * term_width - position) % term_width; // FIXME
 
-    printf("%*s", remaining, "");
+    printf("%*s\n", remaining, "");
 
 
     int y_pos = 1, line;
@@ -514,13 +550,13 @@ void full_redraw(void)
     bool bot = (line >= active_buffer->line_count - 1);
 
     if (top && bot)
-        print("All");
+        puts("All");
     else if (top)
-        print("Top");
+        puts("Top");
     else if (bot)
-        print("Bot");
+        puts("Bot");
     else
-        printf("%2i%%", (active_buffer->ys * 100) / (active_buffer->line_count - line + active_buffer->ys));
+        printf("%2i%%\n", (active_buffer->ys * 100) / (active_buffer->line_count - line + active_buffer->ys));
 
 
     if (input_mode != MODE_NORMAL)

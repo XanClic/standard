@@ -46,6 +46,7 @@ bool buffer_write(buffer_t *buf, const char *target);
 void buffer_destroy(buffer_t *buf);
 
 void buffer_insert(buffer_t *buf, const char *string);
+void buffer_delete(buffer_t *buf, int char_count);
 
 void buffer_list_append(buffer_t *buf);
 

@@ -185,15 +185,6 @@ void buffer_destroy(buffer_t *buf)
 }
 
 
-// Returns the byte offset in the current line (as opposed to active_buffer->x, which is the character offset)
-static int get_active_line_byte_offset(void)
-{
-    int i, j;
-    for (i = j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++);
-    return i;
-}
-
-
 static void ensure_line_size(char **lineptr, size_t len)
 {
     *lineptr = realloc(*lineptr, len + 1);
@@ -204,20 +195,20 @@ void buffer_insert(buffer_t *buf, const char *string)
 {
     buf->modified = true;
 
-    int ofs = get_active_line_byte_offset();
+    int ofs = utf8_byte_offset(buf->lines[buf->y], buf->x);
 
-    size_t line_len = strlen(active_buffer->lines[active_buffer->y]);
+    size_t line_len = strlen(buf->lines[buf->y]);
 
     const char *nl = strchr(string, '\n');
     if (!nl)
     {
         size_t str_len = strlen(string);
 
-        ensure_line_size(&active_buffer->lines[active_buffer->y], line_len + str_len);
-        memmove(&active_buffer->lines[active_buffer->y][ofs + str_len], &active_buffer->lines[active_buffer->y][ofs], line_len - ofs + 1);
-        memcpy(&active_buffer->lines[active_buffer->y][ofs], string, str_len);
+        ensure_line_size(&buf->lines[buf->y], line_len + str_len);
+        memmove(&buf->lines[buf->y][ofs + str_len], &buf->lines[buf->y][ofs], line_len - ofs + 1);
+        memcpy(&buf->lines[buf->y][ofs], string, str_len);
 
-        active_buffer->x += utf8_strlen(string);
+        buf->x += utf8_strlen(string);
 
         return;
     }
@@ -225,25 +216,77 @@ void buffer_insert(buffer_t *buf, const char *string)
 
     size_t str_len = nl - string;
 
-    active_buffer->lines = realloc(active_buffer->lines, ++active_buffer->line_count * sizeof(*active_buffer->lines));
+    buf->lines = realloc(buf->lines, ++buf->line_count * sizeof(*buf->lines));
 
-    memmove(&active_buffer->lines[active_buffer->y + 2], &active_buffer->lines[active_buffer->y + 1], (active_buffer->line_count - active_buffer->y - 2) * sizeof(*active_buffer->lines));
+    memmove(&buf->lines[buf->y + 2], &buf->lines[buf->y + 1], (buf->line_count - buf->y - 2) * sizeof(*buf->lines));
 
-    active_buffer->lines[active_buffer->y + 1] = malloc(line_len - ofs + 1);
+    buf->lines[buf->y + 1] = malloc(line_len - ofs + 1);
 
-    strcpy(active_buffer->lines[active_buffer->y + 1], &active_buffer->lines[active_buffer->y][ofs]);
+    strcpy(buf->lines[buf->y + 1], &buf->lines[buf->y][ofs]);
 
-    ensure_line_size(&active_buffer->lines[active_buffer->y], ofs + str_len + 1);
-    memcpy(&active_buffer->lines[active_buffer->y][ofs], string, str_len);
-    active_buffer->lines[active_buffer->y][ofs + str_len] = 0;
+    ensure_line_size(&buf->lines[buf->y], ofs + str_len + 1);
+    memcpy(&buf->lines[buf->y][ofs], string, str_len);
+    buf->lines[buf->y][ofs + str_len] = 0;
 
 
-    active_buffer->x = 0;
-    active_buffer->y++;
+    buf->x = 0;
+    buf->y++;
 
 
     if (nl[1])
         buffer_insert(buf, nl + 1);
+}
+
+
+void buffer_delete(buffer_t *buf, int char_count)
+{
+    while (char_count > 0)
+    {
+        int remaining = utf8_strlen(buf->lines[buf->y]) - buf->x;
+        int x_offset = utf8_byte_offset(buf->lines[buf->y], buf->x);
+
+
+        if (remaining == char_count)
+        {
+            if (buf->x > 0)
+                buf->x -= utf8_mbclen(buf->lines[buf->x][x_offset]);
+
+            buf->lines[buf->y][x_offset] = 0;
+        }
+        else if (remaining > char_count)
+        {
+            int bytes = utf8_byte_offset(&buf->lines[buf->y][x_offset], char_count);
+            memmove(&buf->lines[buf->y][x_offset], &buf->lines[buf->y][x_offset + bytes], strlen(&buf->lines[buf->y][x_offset + bytes]) + 1); // inkl. NUL
+        }
+        else
+        {
+            if (buf->line_count <= buf->y + 1)
+            {
+                if (buf->x > 0)
+                    buf->x -= utf8_mbclen(buf->lines[buf->x][x_offset]);
+
+                buf->lines[buf->y][x_offset] = 0;
+                return;
+            }
+
+
+            // TODO: Optimize (multiple lines at once, if neccessary)
+            size_t next_line_length = strlen(buf->lines[buf->y + 1]);
+
+            buf->lines[buf->y] = realloc(buf->lines[buf->y], x_offset + next_line_length + 1);
+            memmove(&buf->lines[buf->y][x_offset], buf->lines[buf->y + 1], next_line_length + 1);
+
+            free(buf->lines[buf->y + 1]);
+            memmove(&buf->lines[buf->y + 1], &buf->lines[buf->y + 2], (--buf->line_count - buf->y - 1) * sizeof(buf->lines[0]));
+
+            remaining++; // newline
+        }
+
+
+        char_count -= remaining;
+
+        buf->modified = true;
+    }
 }
 
 
