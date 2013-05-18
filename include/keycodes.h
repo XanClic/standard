@@ -28,4 +28,6 @@
 #define KEY_F11 0xE03A
 #define KEY_F12 0xE03B
 
+#define KEY_BACKSPACE 127
+
 #endif

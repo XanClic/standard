@@ -28,3 +28,15 @@ int utf8_mbclen(char start_chr)
     else
         return 1; // failsafe
 }
+
+
+int utf8_byte_offset(const char *str, int char_count)
+{
+    int i;
+
+    for (i = 0; str[i] && (char_count > 0); i++, char_count--)
+        while ((str[i] & 0x80) && ((str[i] & 0xc0) != 0x80))
+            i++;
+
+    return (char_count > 0) ? -1 : i;
+}
