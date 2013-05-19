@@ -360,14 +360,14 @@ void load_config(void)
     bufcls = mrb_define_class(gmrbs, "Buffer", NULL);
     mrb_define_class_method(gmrbs, bufcls, "active", &get_active_buffer, ARGS_NONE());
     mrb_define_method(gmrbs, bufcls, "x",  &buffer_get_x, ARGS_NONE());
-    mrb_define_method(gmrbs, bufcls, "x=", &buffer_set_x, ARGS_NONE());
+    mrb_define_method(gmrbs, bufcls, "x=", &buffer_set_x, ARGS_REQ(1));
     mrb_define_method(gmrbs, bufcls, "y",  &buffer_get_y, ARGS_NONE());
-    mrb_define_method(gmrbs, bufcls, "y=", &buffer_set_y, ARGS_NONE());
+    mrb_define_method(gmrbs, bufcls, "y=", &buffer_set_y, ARGS_REQ(1));
     mrb_define_method(gmrbs, bufcls, "lines", &buffer_get_lines, ARGS_NONE());
-    mrb_define_method(gmrbs, bufcls, "delete", &buffer_del, ARGS_NONE());
+    mrb_define_method(gmrbs, bufcls, "delete", &buffer_del, ARGS_REQ(1));
 
     buflincls = mrb_define_class(gmrbs, "BufferLines", NULL);
-    mrb_define_method(gmrbs, buflincls, "[]", &buffer_get_line, ARGS_NONE());
+    mrb_define_method(gmrbs, buflincls, "[]", &buffer_get_line, ARGS_REQ(1));
 
 
     mrb_load_file(gmrbs, fp);
