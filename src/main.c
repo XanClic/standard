@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
                        "--version, -v  Show current version\n");
                 return 0;
             case 'v':
-                printf("standard: A fast and extensible terminal editor.\n");
+                fprintf(stderr, "standard: A fast and extensible terminal editor.\n");
                 return 0;
             default:
                 return 0;
