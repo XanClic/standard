@@ -9,28 +9,21 @@
 #include "term.h"
 
 
+#define error_assert(condition, ...) if (!(condition)) { error(__VA_ARGS__); return; }
+
+
 static void quit(char **cmd_line)
 {
-    if (cmd_line[1])
-    {
-        error("Unexpected parameter.");
-        return;
-    }
+    error_assert(!cmd_line[1], "Unexpected parameter.");
+    error_assert(!active_buffer->modified, "%s has been modified.", active_buffer->name);
 
-    if (!active_buffer->modified)
-        buffer_destroy(active_buffer);
-    else
-        error("%s has been modified.", active_buffer->name);
+    buffer_destroy(active_buffer);
 }
 
 
 static void force_quit(char **cmd_line)
 {
-    if (cmd_line[1])
-    {
-        error("Unexpected parameter.");
-        return;
-    }
+    error_assert(!cmd_line[1], "Unexpected parameter.");
 
     buffer_destroy(active_buffer);
 }
@@ -38,20 +31,10 @@ static void force_quit(char **cmd_line)
 
 static void quit_all(char **cmd_line)
 {
-    if (cmd_line[1])
-    {
-        error("Unexpected parameter.");
-        return;
-    }
+    error_assert(!cmd_line[1], "Unexpected parameter.");
 
     for (buffer_list_t *bl = buffer_list; bl != NULL; bl = bl->next)
-    {
-        if (bl->buffer->modified)
-        {
-            error("%s has been modified.", bl->buffer->name);
-            return;
-        }
-    }
+        error_assert(!bl->buffer->modified, "%s has been modified.", bl->buffer->name);
 
     exit(0);
 }
@@ -59,11 +42,7 @@ static void quit_all(char **cmd_line)
 
 static void force_quit_all(char **cmd_line)
 {
-    if (cmd_line[1])
-    {
-        error("Unexpected parameter.");
-        return;
-    }
+    error_assert(!cmd_line[1], "Unexpected parameter.");
 
     exit(0);
 }
@@ -71,11 +50,7 @@ static void force_quit_all(char **cmd_line)
 
 static void tabnext(char **cmd_line)
 {
-    if (cmd_line[1])
-    {
-        error("Unexpected parameter.");
-        return;
-    }
+    error_assert(!cmd_line[1], "Unexpected parameter.");
 
     buffer_activate_next();
 }
@@ -83,13 +58,18 @@ static void tabnext(char **cmd_line)
 
 static void tabprevious(char **cmd_line)
 {
-    if (cmd_line[1])
-    {
-        error("Unexpected parameter.");
-        return;
-    }
+    error_assert(!cmd_line[1], "Unexpected parameter.");
 
     buffer_activate_prev();
+}
+
+
+static void tabnew(char **cmd_line)
+{
+    error_assert(!cmd_line[1], "Unexpected parameter.");
+
+    new_buffer();
+    full_redraw();
 }
 
 
@@ -169,6 +149,17 @@ static void write_and_quit_all(char **cmd_line)
 }
 
 
+static void buf_edit(char **cmd_line)
+{
+    error_assert(cmd_line[1], "Expected a file path.");
+    error_assert(!cmd_line[2], "Only one file path allowed.");
+
+    error_assert(buffer_load(active_buffer, cmd_line[1]), "Could not load “%s”.", cmd_line[1]);
+
+    update_active_buffer();
+}
+
+
 struct cmd_handler command_handlers[] = {
     { "q", quit },
     { "q!", force_quit },
@@ -176,11 +167,14 @@ struct cmd_handler command_handlers[] = {
     { "qa!", force_quit_all },
     { "tabnext", tabnext },
     { "tabprevious", tabprevious },
+    { "tabnew", tabnew },
     { "w", buf_write },
     { "x", write_and_quit },
     { "wq", write_and_quit },
     { "xa", write_and_quit_all },
     { "wqa", write_and_quit_all },
+    { "e", buf_edit },
+    { "o", buf_edit },
 
     { NULL, NULL }
 };
