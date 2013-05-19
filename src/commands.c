@@ -98,7 +98,9 @@ static bool raw_write(char **cmd_line)
     int parcount;
     for (parcount = 0; cmd_line[parcount]; parcount++);
 
-    for (int i = parcount - 1; i > 0; i++)
+    // The first parameter is the file to be associated, the following are just
+    // duplicates – thus, write in backwards.
+    for (int i = parcount - 1; i > 0; i--)
     {
         if (!buffer_write(active_buffer, cmd_line[i]))
         {
@@ -109,7 +111,12 @@ static bool raw_write(char **cmd_line)
 
     if (parcount <= 1)
     {
-        if (!buffer_write(active_buffer, NULL))
+        if (!active_buffer->location)
+        {
+            error("No file associated with %s.", active_buffer->name);
+            return false;
+        }
+        else if (!buffer_write(active_buffer, NULL))
         {
             error("Could not write to “%s”.", active_buffer->location);
             return false;
@@ -143,10 +150,18 @@ static void write_and_quit_all(char **cmd_line)
 
     for (buffer_list_t *bl = buffer_list; bl != NULL; bl = bl->next)
     {
-        if (bl->buffer->modified && !buffer_write(bl->buffer, NULL))
+        if (bl->buffer->modified)
         {
-            error("Could not save to “%s”.", bl->buffer->location);
-            return;
+            if (!bl->buffer->location)
+            {
+                error("No file associated with %s.", bl->buffer->name);
+                return;
+            }
+            else if (!buffer_write(bl->buffer, NULL))
+            {
+                error("Could not write to “%s”.", bl->buffer->location);
+                return;
+            }
         }
     }
 

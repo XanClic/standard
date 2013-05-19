@@ -305,6 +305,7 @@ void editor(void)
 {
     full_redraw();
 
+
     for (;;)
     {
         int inp = input_read();
@@ -511,7 +512,7 @@ void full_redraw(void)
 
     syntax_region(SYNREG_STATUSBAR);
 
-    printf("%-*s", term_width - 16, active_buffer->location);
+    printf("%-*s", term_width - 16, active_buffer->location ? active_buffer->location : "[unsaved]");
     position = printf("%i,%i", active_buffer->y + 1, active_buffer->x + 1);
 
     printf("%*c", 13 - position, ' ');

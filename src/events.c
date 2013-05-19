@@ -5,7 +5,7 @@
 #include "events.h"
 
 
-#define EVENT_HASH_BITS 4
+#define EVENT_HASH_BITS 8
 
 
 static struct event_handler_list
