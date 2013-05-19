@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,11 +26,24 @@ void print_flushed(const char *s)
 
 
 static struct termios initial_tios;
+static bool claimed = false;
 
 
-static void term_release(void)
+void term_release(void)
 {
-    term_clear();
+    static bool cleared = false;
+
+    if (!claimed)
+        return;
+
+
+    if (!cleared)
+    {
+        term_clear();
+        fflush(stdout);
+
+        cleared = true;
+    }
 
     tcsetattr(STDIN_FILENO, TCSANOW, &initial_tios);
 }
@@ -43,9 +57,10 @@ void term_init(void)
     term_width  = ws.ws_col;
     term_height = ws.ws_row;
 
-    atexit(term_release);
-
     tcgetattr(STDIN_FILENO, &initial_tios);
+
+    claimed = true;
+    atexit(term_release);
 
     struct termios tios;
     memcpy(&tios, &initial_tios, sizeof(tios));

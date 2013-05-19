@@ -13,3 +13,15 @@ hi statusbar bold
 
 hi placeholder_empty termfg: 4
 hi placeholder_line termfg: 3
+
+def backspace_pressed
+    if Buffer.active.x > 0
+        i LEFT, DEL
+    elsif Buffer.active.y > 0
+        Buffer.active.y -= 1
+        Buffer.active.x = Buffer.active.lines[Buffer.active.y].length
+        Buffer.active.delete(1)
+    end
+end
+
+imapf BS => :backspace_pressed

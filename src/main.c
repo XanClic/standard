@@ -15,9 +15,9 @@ int main(int argc, char *argv[])
     }
 
 
-    term_init();
-
     load_config();
+
+    term_init();
 
 
     for (int i = 1; i < argc; i++)
