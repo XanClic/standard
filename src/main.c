@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 
     if (argc < 2)
     {
-        printf("standard: Argument expected.\n");
+        fprintf(stderr, "standard: Argument expected.\n");
         return 1;
     }
 
