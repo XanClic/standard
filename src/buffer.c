@@ -36,6 +36,8 @@ static void update_buffer_name(buffer_t *buf)
             break;
         }
     }
+
+    full_redraw();
 }
 
 
@@ -302,7 +304,7 @@ void buffer_delete(buffer_t *buf, int char_count)
             }
 
 
-            // TODO: Optimize (multiple lines at once, if neccessary)
+            // TODO: Optimize (multiple lines at once, if necessary)
             size_t next_line_length = strlen(buf->lines[buf->y + 1]);
 
             buf->lines[buf->y] = realloc(buf->lines[buf->y], x_offset + next_line_length + 1);
@@ -328,11 +330,19 @@ void buffer_list_append(buffer_t *buf)
 
     bl->buffer = buf;
 
-    buffer_list_t **blp;
-    for (blp = &buffer_list; (*blp != NULL) && ((*blp)->buffer != active_buffer); blp = &(*blp)->next);
+    if (buffer_list == NULL)
+    {
+        bl->next = NULL;
+        buffer_list = bl;
+    }
+    else
+    {
+        buffer_list_t *blp;
+        for (blp = buffer_list; (blp->next != NULL) && (blp->buffer != active_buffer); blp = blp->next);
 
-    bl->next = *blp;
-    *blp = bl;
+        bl->next = blp->next;
+        blp->next = bl;
+    }
 
 
     if (!active_buffer)
