@@ -53,6 +53,8 @@ int main(int argc, char *argv[])
     {
         if (!load_buffer(argv[i]))
         {
+            term_release();
+
             fprintf(stderr, "Could not load “%s”.\n", argv[i]);
             return 1;
         }
