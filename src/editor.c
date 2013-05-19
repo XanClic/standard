@@ -11,6 +11,8 @@
 #include "commands.h"
 #include "config.h"
 #include "editor.h"
+#include "events.h"
+#include "input.h"
 #include "keycodes.h"
 #include "syntax.h"
 #include "term.h"
@@ -133,7 +135,7 @@ static void command_line(void)
     char cmd[128];
 
     int i = 0;
-    while ((i < 127) && ((cmd[i++] = getchar()) != '\n'))
+    while ((i < 127) && ((cmd[i++] = input_read()) != '\n'))
     {
         if ((cmd[i - 1] == ':') && (i == 1))
             cmd[--i] = 0;
@@ -216,42 +218,6 @@ static int slr(buffer_t *buf, int line)
 }
 
 
-// escape sequence translation table 1; TT for '\e[A' etc.
-static int eseq_tt1[26] = {
-    ['A' - 'A'] = KEY_UP,
-    ['B' - 'A'] = KEY_DOWN,
-    ['C' - 'A'] = KEY_RIGHT,
-    ['D' - 'A'] = KEY_LEFT,
-    ['F' - 'A'] = KEY_END,
-    ['H' - 'A'] = KEY_HOME
-};
-
-
-static int read_escape_sequence(void)
-{
-    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
-    char escape_sequence[8];
-    int eseq_len = read(STDIN_FILENO, escape_sequence, 7);
-    fcntl(STDIN_FILENO, F_SETFL, 0);
-
-    if (eseq_len <= 0)
-        return '\e';
-
-    escape_sequence[eseq_len] = 0;
-
-    if (escape_sequence[0] == '[')
-    {
-        if ((escape_sequence[1] >= 'A') && (escape_sequence[1] <= 'Z'))
-            return eseq_tt1[escape_sequence[1] - 'A'];
-
-        if ((escape_sequence[1] == '3') && (escape_sequence[2] == '~'))
-            return KEY_DELETE;
-    }
-
-    return 0;
-}
-
-
 static void draw_line(buffer_t *buffer, int line)
 {
     syntax_region(SYNREG_LINENR);
@@ -279,7 +245,7 @@ static void draw_line(buffer_t *buffer, int line)
 }
 
 
-static void write_string(const char *s)
+void write_string(const char *s)
 {
     bool old_modified = active_buffer->modified;
 
@@ -312,7 +278,7 @@ static void write_string(const char *s)
 }
 
 
-static void delete_chars(int count)
+void delete_chars(int count)
 {
     bool old_modified = active_buffer->modified;
 
@@ -341,10 +307,14 @@ void editor(void)
 
     for (;;)
     {
-        int inp = getchar();
+        int inp = input_read();
 
-        if (inp == '\e')
-            inp = read_escape_sequence();
+
+        if ((input_mode == MODE_NORMAL) && trigger_event((event_t){ EVENT_NORMAL_KEY, inp }))
+            continue;
+        if ((input_mode == MODE_INSERT) && trigger_event((event_t){ EVENT_INSERT_KEY, inp }))
+            continue;
+
 
         if (input_mode == MODE_NORMAL)
         {

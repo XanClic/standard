@@ -35,6 +35,7 @@ extern int term_width, term_height;
 
 
 void term_init(void);
+void term_release(void);
 
 void print(const char *s);
 void print_flushed(const char *s);
