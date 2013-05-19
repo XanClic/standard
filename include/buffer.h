@@ -41,7 +41,9 @@ extern buffer_list_t *buffer_list;
 extern buffer_t *active_buffer;
 
 
-bool load_buffer(const char *file);
+buffer_t *new_buffer(void);
+
+bool buffer_load(buffer_t *buf, const char *source);
 bool buffer_write(buffer_t *buf, const char *target);
 void buffer_destroy(buffer_t *buf);
 

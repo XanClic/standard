@@ -8,24 +8,24 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2)
-    {
-        fprintf(stderr, "Argument expected.\n");
-        return 1;
-    }
-
-
     load_config();
 
     term_init();
 
 
-    for (int i = 1; i < argc; i++)
+    if (argc < 2)
+        new_buffer();
+    else
     {
-        if (!load_buffer(argv[i]))
+        for (int i = 1; i < argc; i++)
         {
-            fprintf(stderr, "Could not load “%s”.\n", argv[i]);
-            return 1;
+            buffer_t *buf = new_buffer();
+
+            if (!buffer_load(buf, argv[i]))
+            {
+                fprintf(stderr, "Could not load “%s”.\n", argv[i]);
+                return 1;
+            }
         }
     }
 

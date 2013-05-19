@@ -18,6 +18,8 @@ buffer_t *active_buffer = NULL;
 
 static void update_buffer_name(buffer_t *buf)
 {
+    free(buf->name);
+
     buf->name = malloc(strlen(buf->location) + 1);
     for (int i = 0, oi = 0; buf->location[i]; i++)
     {
@@ -37,9 +39,35 @@ static void update_buffer_name(buffer_t *buf)
 }
 
 
-bool load_buffer(const char *file)
+buffer_t *new_buffer(void)
 {
-    FILE *fp = fopen(file, "r");
+    buffer_t *buf = malloc(sizeof(*buf));
+
+    buf->location = NULL;
+    buf->x = buf->y = buf->ys = 0;
+    buf->modified = false;
+
+    buf->line_count = 1;
+    buf->linenr_width = 1;
+
+    buf->lines = malloc(sizeof(*buf->lines));
+    buf->line_screen_pos = malloc(sizeof(*buf->line_screen_pos));
+
+    buf->lines[0] = malloc(1);
+    buf->lines[0][0] = 0;
+
+    buf->name = strdup("[unnamed]");
+
+
+    buffer_list_append(buf);
+
+    return buf;
+}
+
+
+bool buffer_load(buffer_t *buf, const char *source)
+{
+    FILE *fp = fopen(source, "r");
 
     if (fp == NULL)
         return false;
@@ -56,9 +84,15 @@ bool load_buffer(const char *file)
     fclose(fp);
 
 
-    buffer_t *buf = malloc(sizeof(*buf));
+    free(buf->location);
+    for (int i = 0; i < buf->line_count; i++)
+        free(buf->lines[i]);
+    free(buf->lines);
+    free(buf->line_screen_pos);
 
-    buf->location = strdup(file);
+
+    buf->location = strdup(source);
+
     buf->x = buf->y = buf->ys = 0;
     buf->modified = false;
 
@@ -91,9 +125,6 @@ bool load_buffer(const char *file)
 
 
     update_buffer_name(buf);
-
-
-    buffer_list_append(buf);
 
 
     return true;
@@ -170,8 +201,8 @@ void buffer_destroy(buffer_t *buf)
     }
 
 
-    free((char *)buf->location);
-    free((char *)buf->name);
+    free(buf->location);
+    free(buf->name);
 
     for (int i = 0; i < buf->line_count; i++)
         free(buf->lines[i]);
@@ -295,12 +326,12 @@ void buffer_list_append(buffer_t *buf)
 {
     buffer_list_t *bl = malloc(sizeof(*bl));
 
-    bl->next = NULL;
     bl->buffer = buf;
 
     buffer_list_t **blp;
-    for (blp = &buffer_list; *blp != NULL; blp = &(*blp)->next);
+    for (blp = &buffer_list; (*blp != NULL) && ((*blp)->buffer != active_buffer); blp = &(*blp)->next);
 
+    bl->next = *blp;
     *blp = bl;
 
 
