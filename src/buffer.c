@@ -64,7 +64,7 @@ bool load_buffer(const char *file)
 
     buf->line_count = 1;
     for (int i = 0; content[i]; i++)
-        if (content[i] == '\n')
+        if ((content[i] == '\n') && content[i + 1]) // Don't count an empty line at EOF
             buf->line_count++;
 
     buf->linenr_width = get_decimal_length(buf->line_count);
@@ -78,6 +78,8 @@ bool load_buffer(const char *file)
         char *newline = strchr(content_pos, '\n');
         if (newline)
             *newline = 0;
+        else if (!*content_pos) // Ignore empty line at EOF
+            break;
 
         if (newline && (newline != content_pos) && (newline[-1] == '\r'))
             newline[-1] = 0;
@@ -112,8 +114,7 @@ bool buffer_write(buffer_t *buf, const char *target)
     for (int i = 0; i < buf->line_count; i++)
     {
         fputs(buf->lines[i], fp);
-        if (i < buf->line_count - 1)
-            fputc('\n', fp);
+        fputc('\n', fp);
     }
 
     fclose(fp);
