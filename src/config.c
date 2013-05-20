@@ -81,7 +81,7 @@ static const struct
     { "DEL",        KEY_NSHIFT | KEY_DELETE },
     { "INS",        KEY_NSHIFT | KEY_INSERT },
     { "HOME",       KEY_NSHIFT | KEY_HOME },
-    { "END",        KEY_NSHIFT | KEY_END },
+    { "KEND",       KEY_NSHIFT | KEY_END },
     { "UP",         KEY_NSHIFT | KEY_UP },
     { "DOWN",       KEY_NSHIFT | KEY_DOWN },
     { "LEFT",       KEY_NSHIFT | KEY_LEFT },
