@@ -30,3 +30,6 @@ imap BS => :backspace_pressed
 nmap T.c     => ":tabnew\n"
 nmap LEFT.c  => ":tabprevious\n"
 nmap RIGHT.c => ":tabnext\n"
+
+nmap O   => ['i'.bytes, KEND, "\n".bytes].flatten
+nmap O.s => ['i'.bytes, HOME, "\n".bytes, UP].flatten
