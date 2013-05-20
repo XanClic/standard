@@ -241,7 +241,8 @@ static void draw_line(buffer_t *buffer, int line)
         }
     }
 
-    printf("%*s\n", buffer_width - x - buffer->linenr_width - 2, "");
+
+    printf("%*s\n", buffer_width - (2 + buffer->linenr_width + x) % buffer_width, "");
 }
 
 
@@ -325,14 +326,12 @@ void editor(void)
                     command_line();
                     break;
 
-                case 'h': inp = KEY_LEFT;   break;
-                case 'l': inp = KEY_RIGHT;  break;
-                case 'j': inp = KEY_DOWN;   break;
-                case 'k': inp = KEY_UP;     break;
+                case 'h': inp = KEY_NSHIFT | KEY_LEFT;   break;
+                case 'l': inp = KEY_NSHIFT | KEY_RIGHT;  break;
+                case 'j': inp = KEY_NSHIFT | KEY_DOWN;   break;
+                case 'k': inp = KEY_NSHIFT | KEY_UP;     break;
 
-                case 127: inp = KEY_LEFT;   break;
-
-                case 'x': inp = KEY_DELETE; break;
+                case 'x': inp = KEY_NSHIFT | KEY_DELETE; break;
 
                 case 'a':
                     // Advancing is always possible, except for when the line is empty
@@ -367,11 +366,8 @@ void editor(void)
                 int expected = utf8_mbclen(inp);
 
                 if (expected)
-                {
-                    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
-                    read(STDIN_FILENO, full_mbc, expected - 1);
-                    fcntl(STDIN_FILENO, F_SETFL, 0);
-                }
+                    for (int i = 1; i < expected; i++)
+                        full_mbc[i] = input_read();
             }
 
             write_string(full_mbc);
@@ -379,19 +375,19 @@ void editor(void)
 
         switch (inp)
         {
-            case KEY_LEFT:
+            case KEY_NSHIFT | KEY_LEFT:
                 if (active_buffer->x)
                     active_buffer->x--;
                 reposition_cursor(true);
                 break;
 
-            case KEY_RIGHT:
+            case KEY_NSHIFT | KEY_RIGHT:
                 if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - (input_mode != MODE_INSERT))
                     active_buffer->x++;
                 reposition_cursor(true);
                 break;
 
-            case KEY_DOWN:
+            case KEY_NSHIFT | KEY_DOWN:
                 if (active_buffer->y < active_buffer->line_count - 1)
                     active_buffer->y++;
                 if (active_buffer->y > active_buffer->ye)
@@ -405,7 +401,7 @@ void editor(void)
                 reposition_cursor(false);
                 break;
 
-            case KEY_UP:
+            case KEY_NSHIFT | KEY_UP:
                 if (active_buffer->y > 0)
                     active_buffer->y--;
                 line_change_update_x();
@@ -417,18 +413,18 @@ void editor(void)
                 reposition_cursor(false);
                 break;
 
-            case KEY_END:
+            case KEY_NSHIFT | KEY_END:
                 desired_cursor_x = -1;
                 line_change_update_x();
                 reposition_cursor(false);
                 break;
 
-            case KEY_HOME:
+            case KEY_NSHIFT | KEY_HOME:
                 active_buffer->x = 0;
                 reposition_cursor(true);
                 break;
 
-            case KEY_DELETE:
+            case KEY_NSHIFT | KEY_DELETE:
                 delete_chars(1);
                 break;
         }

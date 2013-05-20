@@ -7,9 +7,10 @@
 #include <sys/ioctl.h>
 
 #include "term.h"
+#include "terminfo.h"
 
 
-int term_width, term_height;
+int term_width = 80, term_height = 25;
 
 
 void print(const char *s)
@@ -51,6 +52,8 @@ void term_release(void)
 
 void term_init(void)
 {
+    terminfo_load();
+
     struct winsize ws;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
 

@@ -69,7 +69,7 @@ static void tabnew(char **cmd_line)
     error_assert(!cmd_line[1], "Unexpected parameter.");
 
     new_buffer();
-    full_redraw();
+    buffer_activate_next();
 }
 
 
@@ -153,6 +153,8 @@ static void buf_edit(char **cmd_line)
 {
     error_assert(cmd_line[1], "Expected a file path.");
     error_assert(!cmd_line[2], "Only one file path allowed.");
+
+    error_assert(!active_buffer->modified, "%s has been modified.", active_buffer->name);
 
     error_assert(buffer_load(active_buffer, cmd_line[1]), "Could not load “%s”.", cmd_line[1]);
 
