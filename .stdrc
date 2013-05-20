@@ -27,6 +27,6 @@ end
 nmap BS => [LEFT]
 imap BS => :backspace_pressed
 
-nmap T.c     => ":tabnew\n".bytes
-nmap LEFT.c  => ":tabprevious\n".bytes
-nmap RIGHT.c => ":tabnext\n".bytes
+nmap T.c     => ":tabnew\n"
+nmap LEFT.c  => ":tabprevious\n"
+nmap RIGHT.c => ":tabnext\n"

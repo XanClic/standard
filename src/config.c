@@ -252,13 +252,14 @@ static void generic_map(mrb_state *mrbs, int event_type)
         mrb_value target = mrb_hash_get(mrbs, mappings, key);
 
         bool map_func = mrb_symbol_p(target);
-        bool map_str  = mrb_array_p(target);
-        if (!map_func && !map_str)
-            mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol or an array of integers");
+        bool map_ary  = mrb_array_p(target);
+        bool map_str  = mrb_string_p(target);
+        if (!map_func && !map_ary && !map_str)
+            mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol, a string or an array of integers");
 
         if (map_func)
             register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_call, (void *)(uintptr_t)mrb_symbol(target));
-        else // if (map_str)
+        else if (map_ary)
         {
             int len = mrb_ary_len(mrbs, target);
             int *sim_inp = malloc((len + 1) * sizeof(int));
@@ -267,11 +268,23 @@ static void generic_map(mrb_state *mrbs, int event_type)
             {
                 mrb_value v = mrb_ary_entry(target, i);
                 if (!mrb_fixnum_p(v))
-                    mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol or an array of integers");
+                    mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol, a string or an array of integers");
 
                 sim_inp[i] = mrb_fixnum(v);
             }
 
+            sim_inp[len] = 0;
+
+            register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_input, sim_inp);
+        }
+        else // if (map_str)
+        {
+            const char *ptr = RSTRING_PTR(target);
+            int len = RSTRING_LEN(target);
+            int *sim_inp = malloc((len + 1) * sizeof(int));
+
+            for (int i = 0; i < len; i++)
+                sim_inp[i] = ptr[i];
             sim_inp[len] = 0;
 
             register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_input, sim_inp);
