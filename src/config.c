@@ -115,12 +115,12 @@ static void unhandled_exception(const char *file, mrb_state *mrbs)
 
     // Taken from mruby itself
     mrb_int ciidx = mrb_fixnum(mrb_obj_iv_get(mrbs, mrbs->exc, mrb_intern(mrbs, "ciidx")));
-    if (ciidx >= mrbs->ciend - mrbs->cibase)
+    if (ciidx >= mrbs->c->ciend - mrbs->c->cibase)
         ciidx = 10; /* ciidx is broken... */
 
     for (int i = ciidx; i >= 0; i--)
     {
-        mrb_callinfo *ci = &mrbs->cibase[i];
+        mrb_callinfo *ci = &mrbs->c->cibase[i];
 
         if (MRB_PROC_CFUNC_P(ci->proc))
             continue;
