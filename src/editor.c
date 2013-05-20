@@ -22,12 +22,7 @@
 
 static int desired_cursor_x = 0;
 
-static enum
-{
-    MODE_NORMAL,
-    MODE_INSERT,
-    MODE_REPLACE
-} input_mode = MODE_NORMAL;
+enum input_mode input_mode = MODE_NORMAL;
 
 
 void reposition_cursor(bool update_desire)
@@ -190,7 +185,7 @@ static void line_change_update_x(void)
     if (desired_cursor_x == -1)
     {
         int len = (int)utf8_strlen(active_buffer->lines[active_buffer->y]);
-        active_buffer->x = len ? (len - 1) : 0;
+        active_buffer->x = (input_mode == MODE_INSERT) ? len : (len ? (len - 1) : 0);
         return;
     }
 

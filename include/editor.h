@@ -4,6 +4,16 @@
 #include <stdbool.h>
 
 
+enum input_mode
+{
+    MODE_NORMAL,
+    MODE_INSERT,
+    MODE_REPLACE
+};
+
+extern enum input_mode input_mode;
+
+
 void editor(void);
 
 void full_redraw(void);
