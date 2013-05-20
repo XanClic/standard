@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,43 +9,74 @@
 #include "keycodes.h"
 
 
+#define ESEQ_HASH_BITS 8
+
+
+static struct eseq_trans_list
+{
+    struct eseq_trans_list *next;
+    const char *sequence;
+    int keycode;
+} *eseq_trans_list[1 << ESEQ_HASH_BITS];
+
+
 static size_t fifo_size, fifo_content;
 static int *fifo;
 
 
-// escape sequence translation table 1; TT for '\e[A' etc.
-static int eseq_tt1[26] = {
-    ['A' - 'A'] = KEY_UP,
-    ['B' - 'A'] = KEY_DOWN,
-    ['C' - 'A'] = KEY_RIGHT,
-    ['D' - 'A'] = KEY_LEFT,
-    ['F' - 'A'] = KEY_END,
-    ['H' - 'A'] = KEY_HOME
-};
+static int hash_eseq(const char *sequence)
+{
+    uint32_t hash = 5381;
+    uint8_t c;
+
+    while ((c = *(sequence++)))
+        hash = ((hash << 5) + hash) ^ c;
+
+    return hash & ((1 << ESEQ_HASH_BITS) - 1);
+}
 
 
 static int read_escape_sequence(void)
 {
     fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
-    char escape_sequence[8];
-    int eseq_len = read(STDIN_FILENO, escape_sequence, 7);
+    char escape_sequence[16] = { '\e' };
+    int eseq_len = read(STDIN_FILENO, &escape_sequence[1], 14);
     fcntl(STDIN_FILENO, F_SETFL, 0);
 
     if (eseq_len <= 0)
         return '\e';
 
-    escape_sequence[eseq_len] = 0;
+    int hash = hash_eseq(escape_sequence);
 
-    if (escape_sequence[0] == '[')
-    {
-        if ((escape_sequence[1] >= 'A') && (escape_sequence[1] <= 'Z'))
-            return eseq_tt1[escape_sequence[1] - 'A'];
-
-        if ((escape_sequence[1] == '3') && (escape_sequence[2] == '~'))
-            return KEY_DELETE;
-    }
+    for (struct eseq_trans_list *etl = eseq_trans_list[hash]; etl != NULL; etl = etl->next)
+        if (!strcmp(etl->sequence, escape_sequence))
+            return etl->keycode;
 
     return 0;
+}
+
+
+void add_input_escape_sequence(char *sequence, int keycode)
+{
+    int hash = hash_eseq(sequence);
+    struct eseq_trans_list **etlp;
+
+    for (etlp = &eseq_trans_list[hash]; *etlp != NULL; etlp = &(*etlp)->next)
+    {
+        if (!strcmp((*etlp)->sequence, sequence))
+        {
+            free(sequence);
+            (*etlp)->keycode = keycode;
+            return;
+        }
+    }
+
+    struct eseq_trans_list *etl = malloc(sizeof(*etl));
+    etl->next = NULL;
+    etl->sequence = sequence;
+    etl->keycode = keycode;
+
+    *etlp = etl;
 }
 
 
@@ -65,6 +97,8 @@ int input_read(void)
 
     if (inp == '\e')
         inp = read_escape_sequence();
+    else if ((inp >= 1) && (inp <= 26) && (inp != '\n'))
+        inp = (inp + 96) | KEY_CONTROL;
 
 
     return inp;

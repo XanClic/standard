@@ -1,5 +1,5 @@
-#ifndef _EVENTS_H
-#define _EVENTS_H
+#ifndef EVENTS_H
+#define EVENTS_H
 
 #include <stdbool.h>
 

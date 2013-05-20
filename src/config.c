@@ -51,29 +51,55 @@ static const struct
     const char *name;
     int value;
 } key_aliases[] = {
-    { "BS",         KEY_BACKSPACE },
-    { "DEL",        KEY_DELETE },
-    { "INS",        KEY_INSERT },
-    { "HOME",       KEY_HOME },
-    { "END",        KEY_END },
-    { "UP",         KEY_UP },
-    { "DOWN",       KEY_DOWN },
-    { "LEFT",       KEY_LEFT },
-    { "RIGHT",      KEY_RIGHT },
-    { "PAGEUP",     KEY_PGUP },
-    { "PAGEDOWN",   KEY_PGDOWN },
-    { "F1",         KEY_F1 },
-    { "F2",         KEY_F2 },
-    { "F3",         KEY_F3 },
-    { "F4",         KEY_F4 },
-    { "F5",         KEY_F5 },
-    { "F6",         KEY_F6 },
-    { "F7",         KEY_F7 },
-    { "F8",         KEY_F8 },
-    { "F9",         KEY_F9 },
-    { "F10",        KEY_F10 },
-    { "F11",        KEY_F11 },
-    { "F12",        KEY_F12 },
+    { "A",          'a' },
+    { "B",          'b' },
+    { "C",          'c' },
+    { "D",          'd' },
+    { "E",          'e' },
+    { "F",          'f' },
+    { "G",          'g' },
+    { "H",          'h' },
+    { "I",          'i' },
+    { "J",          'j' },
+    { "K",          'k' },
+    { "L",          'l' },
+    { "M",          'm' },
+    { "N",          'n' },
+    { "O",          'o' },
+    { "P",          'p' },
+    { "Q",          'q' },
+    { "R",          'r' },
+    { "S",          's' },
+    { "T",          't' },
+    { "U",          'u' },
+    { "V",          'v' },
+    { "W",          'w' },
+    { "X",          'x' },
+    { "Y",          'y' },
+    { "Z",          'z' },
+    { "BS",         KEY_NSHIFT | KEY_BACKSPACE },
+    { "DEL",        KEY_NSHIFT | KEY_DELETE },
+    { "INS",        KEY_NSHIFT | KEY_INSERT },
+    { "HOME",       KEY_NSHIFT | KEY_HOME },
+    { "END",        KEY_NSHIFT | KEY_END },
+    { "UP",         KEY_NSHIFT | KEY_UP },
+    { "DOWN",       KEY_NSHIFT | KEY_DOWN },
+    { "LEFT",       KEY_NSHIFT | KEY_LEFT },
+    { "RIGHT",      KEY_NSHIFT | KEY_RIGHT },
+    { "PAGEUP",     KEY_NSHIFT | KEY_PGUP },
+    { "PAGEDOWN",   KEY_NSHIFT | KEY_PGDOWN },
+    { "F1",         KEY_NSHIFT | KEY_F1 },
+    { "F2",         KEY_NSHIFT | KEY_F2 },
+    { "F3",         KEY_NSHIFT | KEY_F3 },
+    { "F4",         KEY_NSHIFT | KEY_F4 },
+    { "F5",         KEY_NSHIFT | KEY_F5 },
+    { "F6",         KEY_NSHIFT | KEY_F6 },
+    { "F7",         KEY_NSHIFT | KEY_F7 },
+    { "F8",         KEY_NSHIFT | KEY_F8 },
+    { "F9",         KEY_NSHIFT | KEY_F9 },
+    { "F10",        KEY_NSHIFT | KEY_F10 },
+    { "F11",        KEY_NSHIFT | KEY_F11 },
+    { "F12",        KEY_NSHIFT | KEY_F12 },
 };
 
 
@@ -141,6 +167,17 @@ static bool event_call(const event_t *event, void *info)
 }
 
 
+static bool event_input(const event_t *event, void *info)
+{
+    (void)event;
+
+    for (int i = 0; ((int *)info)[i]; i++)
+        sim_input(((int *)info)[i]);
+
+    return true;
+}
+
+
 static mrb_value highlight(mrb_state *mrbs, mrb_value self)
 {
     (void)self;
@@ -198,10 +235,8 @@ static mrb_value highlight(mrb_state *mrbs, mrb_value self)
 }
 
 
-static mrb_value imapf(mrb_state *mrbs, mrb_value self)
+static void generic_map(mrb_state *mrbs, int event_type)
 {
-    (void)self;
-
     mrb_value mappings;
     mrb_get_args(mrbs, "H", &mappings);
 
@@ -212,19 +247,49 @@ static mrb_value imapf(mrb_state *mrbs, mrb_value self)
     while (!mrb_nil_p(key = mrb_ary_shift(mrbs, keys)))
     {
         if (!mrb_fixnum_p(key))
+            mrb_raise(mrbs, mrbs->object_class, "Integer expected for map");
+
+        mrb_value target = mrb_hash_get(mrbs, mappings, key);
+
+        bool map_func = mrb_symbol_p(target);
+        bool map_str  = mrb_array_p(target);
+        if (!map_func && !map_str)
+            mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol or an array of integers");
+
+        if (map_func)
+            register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_call, (void *)(uintptr_t)mrb_symbol(target));
+        else // if (map_str)
         {
-            // TODO: One-character strings
-            mrb_raise(mrbs, mrbs->object_class, "Integer expected for imapf");
+            int len = mrb_ary_len(mrbs, target);
+            int *sim_inp = malloc((len + 1) * sizeof(int));
+
+            for (int i = 0; i < len; i++)
+            {
+                mrb_value v = mrb_ary_entry(target, i);
+                if (!mrb_fixnum_p(v))
+                    mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol or an array of integers");
+
+                sim_inp[i] = mrb_fixnum(v);
+            }
+
+            sim_inp[len] = 0;
+
+            register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_input, sim_inp);
         }
-
-        mrb_value fname = mrb_hash_get(mrbs, mappings, key);
-        if (!mrb_symbol_p(fname))
-            mrb_raise(mrbs, mrbs->object_class, "imapf must map onto a symbol");
-
-        register_event_handler((event_t){ EVENT_INSERT_KEY, mrb_fixnum(key) }, event_call, (void *)(uintptr_t)mrb_symbol(fname));
     }
+}
 
+static mrb_value nmap(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+    generic_map(mrbs, EVENT_NORMAL_KEY);
+    return mrb_nil_value();
+}
 
+static mrb_value imap(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+    generic_map(mrbs, EVENT_INSERT_KEY);
     return mrb_nil_value();
 }
 
@@ -233,18 +298,18 @@ static mrb_value input(mrb_state *mrbs, mrb_value self)
 {
     (void)self;
 
-    int argc;
-    mrb_value *argv;
+    mrb_value wat;
 
-    mrb_get_args(mrbs, "*", &argv, &argc);
+    mrb_get_args(mrbs, "A", &wat);
 
 
-    for (int i = 0; i < argc; i++)
+    int len = mrb_ary_len(mrbs, wat);
+    for (int i = 0; i < len; i++)
     {
-        if (!mrb_fixnum_p(argv[i]))
-            mrb_raise(mrbs, mrbs->object_class, "Integer expected for input");
+        if (!mrb_fixnum_p(mrb_ary_entry(wat, i)))
+            mrb_raise(mrbs, mrbs->object_class, "Array of integers expected for input");
 
-        sim_input(mrb_fixnum(argv[i]));
+        sim_input(mrb_fixnum(mrb_ary_entry(wat, i)));
     }
 
 
@@ -349,12 +414,17 @@ void load_config(void)
     mrb_define_alias(gmrbs, gmrbs->object_class, "hi", "highlight");
 
 
-    mrb_define_method(gmrbs, gmrbs->object_class, "imapf", &imapf, ARGS_REQ(2));
-    mrb_define_method(gmrbs, gmrbs->object_class, "input", &input, ARGS_ANY());
+    mrb_define_method(gmrbs, gmrbs->object_class, "nmap", &nmap, ARGS_REQ(1));
+    mrb_define_method(gmrbs, gmrbs->object_class, "imap", &imap, ARGS_REQ(1));
+
+    mrb_define_method(gmrbs, gmrbs->object_class, "input", &input, ARGS_REQ(1));
     mrb_define_alias(gmrbs, gmrbs->object_class, "i", "input");
 
     for (int i = 0; i < (int)(sizeof(key_aliases) / sizeof(key_aliases[0])); i++)
         mrb_define_global_const(gmrbs, key_aliases[i].name, mrb_fixnum_value(key_aliases[i].value));
+
+
+    mrb_load_string(gmrbs, "class Fixnum\ndef s\nself & ~0x20\nend\ndef c\nself | 0x800\nend\ndef a\nself | 0x1000\nend\nend\n");
 
 
     bufcls = mrb_define_class(gmrbs, "Buffer", NULL);

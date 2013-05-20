@@ -16,7 +16,7 @@ hi placeholder_line termfg: 3
 
 def backspace_pressed
     if Buffer.active.x > 0
-        i LEFT, DEL
+        i [LEFT, DEL]
     elsif Buffer.active.y > 0
         Buffer.active.y -= 1
         Buffer.active.x = Buffer.active.lines[Buffer.active.y].length
@@ -24,4 +24,9 @@ def backspace_pressed
     end
 end
 
-imapf BS => :backspace_pressed
+nmap BS => [LEFT]
+imap BS => :backspace_pressed
+
+nmap T.c     => ":tabnew\n".bytes
+nmap LEFT.c  => ":tabprevious\n".bytes
+nmap RIGHT.c => ":tabnext\n".bytes

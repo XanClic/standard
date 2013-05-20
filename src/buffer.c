@@ -283,7 +283,7 @@ void buffer_delete(buffer_t *buf, int char_count)
         if (remaining == char_count)
         {
             if (buf->x > 0)
-                buf->x -= utf8_mbclen(buf->lines[buf->x][x_offset]);
+                buf->x -= utf8_mbclen(buf->lines[buf->y][x_offset]);
 
             buf->lines[buf->y][x_offset] = 0;
         }
@@ -297,7 +297,7 @@ void buffer_delete(buffer_t *buf, int char_count)
             if (buf->line_count <= buf->y + 1)
             {
                 if (buf->x > 0)
-                    buf->x -= utf8_mbclen(buf->lines[buf->x][x_offset]);
+                    buf->x -= utf8_mbclen(buf->lines[buf->y][x_offset]);
 
                 buf->lines[buf->y][x_offset] = 0;
                 return;
