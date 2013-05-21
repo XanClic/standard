@@ -25,6 +25,13 @@ static int desired_cursor_x = 0;
 enum input_mode input_mode = MODE_NORMAL;
 
 
+// Screen lines required
+static int slr(buffer_t *buf, int line)
+{
+    return (1 + buf->linenr_width + 1 + utf8_strlen_vis(buf->lines[line]) + buffer_width - 1) / buffer_width;
+}
+
+
 void reposition_cursor(bool update_desire)
 {
     term_cursor_pos(term_width - 16, term_height - 2);
@@ -33,8 +40,70 @@ void reposition_cursor(bool update_desire)
     printf("%*c", 13 - position, ' ');
 
 
-    int x = 0, dbc = 0;
-    for (int i = 0, j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
+    static int old_x = -1, old_y = -1;
+
+    if (old_x >= 0)
+    {
+        int old_line = -1, old_buf_i;
+
+        // TODO: Optimize
+        for (int line = active_buffer->ys + 1; line <= active_buffer->ye; line++)
+        {
+            if (active_buffer->line_screen_pos[line] > old_y)
+            {
+                old_line = line - 1;
+                break;
+            }
+        }
+
+        term_cursor_pos(old_x, old_y);
+
+        if (old_line < 0)
+        {
+            if (old_y < active_buffer->line_screen_pos[active_buffer->ye] + slr(active_buffer, active_buffer->ye))
+                old_line = active_buffer->ye;
+            else
+            {
+                syntax_region(SYNREG_PLACEHOLDER_EMPTY);
+                putchar(old_x ? ' ' : '~');
+            }
+        }
+
+        if (old_line >= 0)
+        {
+            int old_in_line_x = old_x - 1 - active_buffer->linenr_width - 1;
+            int x = 0;
+            old_buf_i = 0;
+
+            while ((x < old_in_line_x) && active_buffer->lines[old_line][old_buf_i])
+            {
+                if (active_buffer->lines[old_line][old_buf_i] != '\t')
+                    x += utf8_is_dbc(&active_buffer->lines[old_line][old_buf_i]) ? 2 : 1;
+                else
+                    x += tabstop_width - x % tabstop_width;
+
+                old_buf_i += utf8_mbclen(active_buffer->lines[old_line][old_buf_i]);
+            }
+
+            syntax_region(SYNREG_DEFAULT);
+            if ((x < old_in_line_x) || !active_buffer->lines[old_line][old_buf_i] || (active_buffer->lines[old_line][old_buf_i] == '\t'))
+                putchar(' ');
+            else
+                for (int i = 0; i < utf8_mbclen(active_buffer->lines[old_line][old_buf_i]); i++)
+                    putchar(active_buffer->lines[old_line][old_buf_i + i]);
+        }
+    }
+
+
+    if ((active_buffer->y < active_buffer->ys) || (active_buffer->y > active_buffer->ye))
+    {
+        fflush(stdout);
+        return;
+    }
+
+
+    int x = 0, i, j, dbc = 0;
+    for (i = j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
          if (utf8_is_dbc(&(active_buffer->lines[active_buffer->y][i])))
          {
@@ -52,10 +121,50 @@ void reposition_cursor(bool update_desire)
 
     x += 1 + active_buffer->linenr_width + 1 + dbc;
 
-    term_cursor_pos(x, active_buffer->line_screen_pos[active_buffer->y]);
+    int y = active_buffer->line_screen_pos[active_buffer->y] + x / buffer_width;
+
+    x %= buffer_width;
+
+
+    term_cursor_pos(old_x = x, old_y = y);
+
+    syntax_region(SYNREG_DEFAULT);
+    term_invert(true);
+    if (!active_buffer->lines[active_buffer->y][i] || (active_buffer->lines[active_buffer->y][i] == '\t'))
+        putchar(' ');
+    else
+        for (int k = 0; k < utf8_mbclen(active_buffer->lines[active_buffer->y][i]); k++)
+            putchar(active_buffer->lines[active_buffer->y][i + k]);
+    term_invert(false);
+
+    term_cursor_pos(x, y);
 
 
     fflush(stdout);
+}
+
+
+static void ensure_cursor_visibility(void)
+{
+    if (active_buffer->y < active_buffer->ys)
+    {
+        active_buffer->ys = active_buffer->y;
+        full_redraw();
+    }
+    else if (active_buffer->y > active_buffer->ye)
+    {
+        int lines = 0;
+        int ys = active_buffer->y;
+
+        while (lines < buffer_height)
+        {
+            lines += slr(active_buffer, ys);
+            ys--;
+        }
+
+        active_buffer->ys = ys + 1;
+        full_redraw();
+    }
 }
 
 
@@ -129,8 +238,10 @@ static void command_line(void)
     term_cursor_pos(0, term_height - 1);
     syntax_region(SYNREG_DEFAULT);
     printf("%-*c", term_width - 1, ':');
-    fflush(stdout);
     term_cursor_pos(1, term_height - 1);
+
+    term_show_cursor(true);
+    fflush(stdout);
 
     char cmd[128];
 
@@ -155,6 +266,9 @@ static void command_line(void)
             fflush(stdout);
         }
     }
+
+    term_show_cursor(false);
+    fflush(stdout);
 
     if (i)
         cmd[--i] = 0;
@@ -214,13 +328,6 @@ static void line_change_update_x(void)
 }
 
 
-// Screen lines required
-static int slr(buffer_t *buf, int line)
-{
-    return (1 + buf->linenr_width + 1 + utf8_strlen_vis(buf->lines[line]) + buffer_width - 1) / buffer_width;
-}
-
-
 static void draw_line(buffer_t *buffer, int line)
 {
     syntax_region(SYNREG_LINENR);
@@ -256,6 +363,9 @@ static void draw_line(buffer_t *buffer, int line)
 
 void write_string(const char *s)
 {
+    ensure_cursor_visibility();
+
+
     bool old_modified = active_buffer->modified;
 
     int old_slr = slr(active_buffer, active_buffer->y);
@@ -289,6 +399,9 @@ void write_string(const char *s)
 
 void delete_chars(int count)
 {
+    ensure_cursor_visibility();
+
+
     bool old_modified = active_buffer->modified;
 
     int old_slr = slr(active_buffer, active_buffer->y);
@@ -319,14 +432,6 @@ void scroll(int lines)
             active_buffer->ys = 0;
 
         full_redraw(); // update ->ye
-
-        if (active_buffer->y > active_buffer->ye)
-        {
-            active_buffer->y = active_buffer->ye;
-            line_change_update_x();
-
-            full_redraw();
-        }
     }
     else if (lines > 0)
     {
@@ -334,12 +439,6 @@ void scroll(int lines)
         {
             active_buffer->ys++;
             lines--;
-
-            if (active_buffer->y < active_buffer->ys)
-            {
-                active_buffer->y = active_buffer->ys;
-                line_change_update_x();
-            }
 
             full_redraw(); // necessary for ->ye update
         }
@@ -390,7 +489,7 @@ void editor(void)
                     term_cursor_pos(0, term_height - 1);
                     syntax_region(SYNREG_MODEBAR);
                     print("--- INSERT ---");
-                    reposition_cursor(false);
+                    ensure_cursor_visibility();
                     break;
             }
         }
@@ -427,12 +526,14 @@ void editor(void)
                 if (active_buffer->x)
                     active_buffer->x--;
                 reposition_cursor(true);
+                ensure_cursor_visibility();
                 break;
 
             case KEY_NSHIFT | KEY_RIGHT:
                 if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - (input_mode != MODE_INSERT))
                     active_buffer->x++;
                 reposition_cursor(true);
+                ensure_cursor_visibility();
                 break;
 
             case KEY_NSHIFT | KEY_DOWN:
@@ -447,6 +548,7 @@ void editor(void)
                 }
                 line_change_update_x();
                 reposition_cursor(false);
+                ensure_cursor_visibility();
                 break;
 
             case KEY_NSHIFT | KEY_UP:
@@ -459,17 +561,20 @@ void editor(void)
                     full_redraw();
                 }
                 reposition_cursor(false);
+                ensure_cursor_visibility();
                 break;
 
             case KEY_NSHIFT | KEY_END:
                 desired_cursor_x = -1;
                 line_change_update_x();
                 reposition_cursor(false);
+                ensure_cursor_visibility();
                 break;
 
             case KEY_NSHIFT | KEY_HOME:
                 active_buffer->x = 0;
                 reposition_cursor(true);
+                ensure_cursor_visibility();
                 break;
 
             case KEY_NSHIFT | KEY_DELETE:
