@@ -26,3 +26,5 @@
 -Winvalid-pch
 -Wdisabled-optimization
 -Woverlength-strings
+-Wno-missing-field-initializers
+-funsigned-chars

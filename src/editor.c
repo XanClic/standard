@@ -137,7 +137,7 @@ static void command_line(void)
     int i = 0;
     while ((i < 127) && ((cmd[i++] = input_read()) != '\n'))
     {
-        if ((cmd[i - 1] == ':') && (i == 1))
+        if (((cmd[i - 1] == ':') && (i == 1)) || !cmd[i - 1])
             cmd[--i] = 0;
         else if (cmd[i - 1] == 127)
         {
@@ -310,6 +310,43 @@ void delete_chars(int count)
 }
 
 
+void scroll(int lines)
+{
+    if (lines < 0)
+    {
+        active_buffer->ys += lines;
+        if (active_buffer->ys < 0)
+            active_buffer->ys = 0;
+
+        full_redraw(); // update ->ye
+
+        if (active_buffer->y > active_buffer->ye)
+        {
+            active_buffer->y = active_buffer->ye;
+            line_change_update_x();
+
+            full_redraw();
+        }
+    }
+    else if (lines > 0)
+    {
+        while ((lines > 0) && (active_buffer->ye < active_buffer->line_count - 1))
+        {
+            active_buffer->ys++;
+            lines--;
+
+            if (active_buffer->y < active_buffer->ys)
+            {
+                active_buffer->y = active_buffer->ys;
+                line_change_update_x();
+            }
+
+            full_redraw(); // necessary for ->ye update
+        }
+    }
+}
+
+
 void editor(void)
 {
     full_redraw();
@@ -318,6 +355,9 @@ void editor(void)
     for (;;)
     {
         int inp = input_read();
+
+        if (!inp)
+            continue;
 
 
         if ((input_mode == MODE_NORMAL) && trigger_event((event_t){ EVENT_NORMAL_KEY, inp }))

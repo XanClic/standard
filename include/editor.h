@@ -20,6 +20,7 @@ void full_redraw(void);
 
 void update_active_buffer(void);
 void reposition_cursor(bool update_desire);
+void scroll(int lines);
 
 void write_string(const char *s);
 void delete_chars(int count);

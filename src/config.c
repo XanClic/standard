@@ -100,6 +100,12 @@ static const struct
     { "F10",        KEY_NSHIFT | KEY_F10 },
     { "F11",        KEY_NSHIFT | KEY_F11 },
     { "F12",        KEY_NSHIFT | KEY_F12 },
+
+    { "MBUTTON_LEFT",           0 },
+    { "MBUTTON_MIDDLE",         1 },
+    { "MBUTTON_RIGHT",          2 },
+    { "MBUTTON_WHEEL_UP",      64 },
+    { "MBUTTON_WHEEL_DOWN",    65 }
 };
 
 
@@ -306,6 +312,20 @@ static mrb_value imap(mrb_state *mrbs, mrb_value self)
     return mrb_nil_value();
 }
 
+static mrb_value mbdmap(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+    generic_map(mrbs, EVENT_MBUTTON_DOWN);
+    return mrb_nil_value();
+}
+
+static mrb_value mbumap(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+    generic_map(mrbs, EVENT_MBUTTON_UP);
+    return mrb_nil_value();
+}
+
 
 static mrb_value input(mrb_state *mrbs, mrb_value self)
 {
@@ -399,6 +419,15 @@ static mrb_value buffer_get_line(mrb_state *mrbs, mrb_value self)
 }
 
 
+static mrb_value editor_scroll(mrb_state *mrbs, mrb_value self)
+{
+    mrb_int lines;
+    mrb_get_args(mrbs, "i", &lines);
+    scroll(lines);
+    return mrb_nil_value();
+}
+
+
 void load_config(void)
 {
     FILE *fp = fopen(".stdrc", "r");
@@ -429,6 +458,8 @@ void load_config(void)
 
     mrb_define_method(gmrbs, gmrbs->object_class, "nmap", &nmap, ARGS_REQ(1));
     mrb_define_method(gmrbs, gmrbs->object_class, "imap", &imap, ARGS_REQ(1));
+    mrb_define_method(gmrbs, gmrbs->object_class, "mbdmap", &mbdmap, ARGS_REQ(1));
+    mrb_define_method(gmrbs, gmrbs->object_class, "mbumap", &mbumap, ARGS_REQ(1));
 
     mrb_define_method(gmrbs, gmrbs->object_class, "input", &input, ARGS_REQ(1));
     mrb_define_alias(gmrbs, gmrbs->object_class, "i", "input");
@@ -451,6 +482,8 @@ void load_config(void)
 
     buflincls = mrb_define_class(gmrbs, "BufferLines", NULL);
     mrb_define_method(gmrbs, buflincls, "[]", &buffer_get_line, ARGS_REQ(1));
+
+    mrb_define_method(gmrbs, gmrbs->object_class, "scroll", &editor_scroll, ARGS_REQ(1));
 
 
     mrb_load_file(gmrbs, fp);
