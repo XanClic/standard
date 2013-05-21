@@ -16,6 +16,23 @@ size_t utf8_strlen(const char *str)
     return len;
 }
 
+size_t utf8_strlen_vis(const char *str)
+{
+    size_t len = 0;
+
+    for (size_t i = 0; str[i]; ++len)
+        if (str[i++] & 0x80)
+        {
+            if (utf8_is_dbc(&str[i - 1]))
+                len++;
+
+            while ((str[i] & 0xc0) == 0x80)
+                i++;
+        }
+
+    return len;
+}
+
 bool utf8_is_dbc(const char *str)
 {
     int clen = utf8_mbclen(*str);
