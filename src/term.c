@@ -47,6 +47,8 @@ void term_release(void)
         cleared = true;
     }
 
+    term_show_cursor(true);
+
     tcsetattr(STDIN_FILENO, TCSANOW, &initial_tios);
     print_flushed("\033[?1000;1002;1006;1015l");
 }
@@ -81,6 +83,9 @@ void term_init(void)
     print_flushed("\033[?1000;1002;1006;1015h");
 
     init_mouse_input_regex();
+
+    term_show_cursor(false);
+    fflush(stdout);
 }
 
 
@@ -149,6 +154,10 @@ void term_set_color(color_t fg, color_t bg)
     }
 }
 
+void term_invert(bool invert)
+{
+    print(invert ? "\033[7m" : "\033[27m");
+}
 
 void term_cursor_pos(int x, int y)
 {
@@ -157,4 +166,9 @@ void term_cursor_pos(int x, int y)
 
     printf("\033[%i;%iH", y + 1, x + 1);
     fflush(stdout);
+}
+
+void term_show_cursor(bool show)
+{
+    printf("\033[?25%c", show ? 'h' : 'l');
 }
