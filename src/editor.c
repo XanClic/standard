@@ -33,9 +33,14 @@ void reposition_cursor(bool update_desire)
     printf("%*c", 13 - position, ' ');
 
 
-    int x = 0;
+    int x = 0, dbc = 0;
     for (int i = 0, j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
+         if (utf8_is_dbc(&(active_buffer->lines[active_buffer->y][i])))
+         {
+             dbc++;
+         }
+
         if (active_buffer->lines[active_buffer->y][i] == '\t')
             x += tabstop_width - x % tabstop_width;
         else
@@ -43,9 +48,9 @@ void reposition_cursor(bool update_desire)
     }
 
     if (update_desire)
-        desired_cursor_x = x;
+        desired_cursor_x = x + dbc;
 
-    x += 1 + active_buffer->linenr_width + 1;
+    x += 1 + active_buffer->linenr_width + 1 + dbc;
 
     term_cursor_pos(x, active_buffer->line_screen_pos[active_buffer->y]);
 
@@ -193,6 +198,9 @@ static void line_change_update_x(void)
     int x = 0, i = 0, j = 0;
     for (; active_buffer->lines[active_buffer->y][i] && (x < desired_cursor_x); i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
+        if (utf8_is_dbc(&(active_buffer->lines[active_buffer->y][i])))
+            ++x;
+
         if (active_buffer->lines[active_buffer->y][i] == '\t')
             x += tabstop_width - x % tabstop_width;
         else
@@ -209,7 +217,7 @@ static void line_change_update_x(void)
 // Screen lines required
 static int slr(buffer_t *buf, int line)
 {
-    return (1 + buf->linenr_width + 1 + utf8_strlen(buf->lines[line]) + buffer_width - 1) / buffer_width;
+    return (1 + buf->linenr_width + 1 + utf8_strlen_vis(buf->lines[line]) + buffer_width - 1) / buffer_width;
 }
 
 
@@ -232,7 +240,12 @@ static void draw_line(buffer_t *buffer, int line)
         {
             putchar(buffer->lines[line][i]);
             if ((buffer->lines[line][i] & 0xc0) != 0x80)
+            {
+                if (utf8_is_dbc(&(buffer->lines[line][i])))
+                    x++;
+
                 x++;
+            }
         }
     }
 
