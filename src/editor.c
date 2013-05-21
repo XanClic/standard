@@ -33,9 +33,14 @@ void reposition_cursor(bool update_desire)
     printf("%*c", 13 - position, ' ');
 
 
-    int x = 0;
+    int x = 0, dbc = 0;
     for (int i = 0, j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
+         if (utf8_is_dbc(&(active_buffer->lines[active_buffer->y][i])))
+         {
+             dbc++;
+         }
+
         if (active_buffer->lines[active_buffer->y][i] == '\t')
             x += tabstop_width - x % tabstop_width;
         else
@@ -43,9 +48,9 @@ void reposition_cursor(bool update_desire)
     }
 
     if (update_desire)
-        desired_cursor_x = x;
+        desired_cursor_x = x + dbc;
 
-    x += 1 + active_buffer->linenr_width + 1;
+    x += 1 + active_buffer->linenr_width + 1 + dbc;
 
     term_cursor_pos(x, active_buffer->line_screen_pos[active_buffer->y]);
 
