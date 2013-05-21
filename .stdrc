@@ -33,3 +33,14 @@ nmap RIGHT.c => ":tabnext\n"
 
 nmap O   => ['i'.bytes, KEND, "\n".bytes].flatten
 nmap O.s => ['i'.bytes, HOME, "\n".bytes, UP].flatten
+
+def wheel_up
+    scroll(-3)
+end
+
+def wheel_down
+    scroll(3)
+end
+
+mbdmap MBUTTON_WHEEL_UP   => :wheel_up
+mbdmap MBUTTON_WHEEL_DOWN => :wheel_down

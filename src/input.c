@@ -1,10 +1,12 @@
 #include <fcntl.h>
+#include <regex.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
+#include "events.h"
 #include "input.h"
 #include "keycodes.h"
 
@@ -39,18 +41,36 @@ static int hash_eseq(const char *sequence)
 static int read_escape_sequence(void)
 {
     fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
-    char escape_sequence[16] = { '\e' };
-    int eseq_len = read(STDIN_FILENO, &escape_sequence[1], 14);
+    char escape_sequence[32] = { '\033' };
+    int eseq_len = fread(&escape_sequence[1], 1, 30, stdin);
     fcntl(STDIN_FILENO, F_SETFL, 0);
 
     if (eseq_len <= 0)
-        return '\e';
+        return '\033';
 
     int hash = hash_eseq(escape_sequence);
 
     for (struct eseq_trans_list *etl = eseq_trans_list[hash]; etl != NULL; etl = etl->next)
         if (!strcmp(etl->sequence, escape_sequence))
             return etl->keycode;
+
+
+    regex_t mouse_input_regex;
+    regcomp(&mouse_input_regex, "^\033\\[<\\([0-9]\\+\\);\\([0-9]\\+\\);\\([0-9]\\+\\)\\([mM]\\)$", 0);
+
+    regmatch_t matches[5];
+    int result = regexec(&mouse_input_regex, escape_sequence, 5, matches, 0);
+
+    regfree(&mouse_input_regex);
+    if (result)
+        return 0;
+
+
+    int button = atoi(&escape_sequence[matches[1].rm_so]);
+    int x      = atoi(&escape_sequence[matches[2].rm_so]);
+    int y      = atoi(&escape_sequence[matches[3].rm_so]);
+
+    trigger_event((event_t){ (escape_sequence[matches[4].rm_so] == 'M') ? EVENT_MBUTTON_DOWN : EVENT_MBUTTON_UP, button, .mbutton = { x, y } });
 
     return 0;
 }

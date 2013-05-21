@@ -47,6 +47,7 @@ void term_release(void)
     }
 
     tcsetattr(STDIN_FILENO, TCSANOW, &initial_tios);
+    print_flushed("\033[?1000;1002;1006l");
 }
 
 
@@ -74,6 +75,9 @@ void term_init(void)
 
     setbuf(stdin, NULL);
     setvbuf(stdout, NULL, _IOFBF, 0);
+
+    // Mouse support
+    print_flushed("\033[?1000;1002;1006h");
 }
 
 
