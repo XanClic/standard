@@ -421,6 +421,8 @@ static mrb_value buffer_get_line(mrb_state *mrbs, mrb_value self)
 
 static mrb_value editor_scroll(mrb_state *mrbs, mrb_value self)
 {
+    (void)self;
+
     mrb_int lines;
     mrb_get_args(mrbs, "i", &lines);
     scroll(lines);

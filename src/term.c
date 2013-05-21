@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
+#include "input.h"
 #include "term.h"
 #include "terminfo.h"
 
@@ -47,7 +48,7 @@ void term_release(void)
     }
 
     tcsetattr(STDIN_FILENO, TCSANOW, &initial_tios);
-    print_flushed("\033[?1000;1002;1006l");
+    print_flushed("\033[?1000;1002;1006;1015l");
 }
 
 
@@ -77,7 +78,9 @@ void term_init(void)
     setvbuf(stdout, NULL, _IOFBF, 0);
 
     // Mouse support
-    print_flushed("\033[?1000;1002;1006h");
+    print_flushed("\033[?1000;1002;1006;1015h");
+
+    init_mouse_input_regex();
 }
 
 

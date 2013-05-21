@@ -1,6 +1,8 @@
 #ifndef INPUT_H
 #define INPUT_H
 
+void init_mouse_input_regex(void);
+
 int input_read(void);
 void sim_input(int val);
 

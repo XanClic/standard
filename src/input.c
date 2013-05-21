@@ -25,6 +25,15 @@ static struct eseq_trans_list
 static size_t fifo_size, fifo_content;
 static int *fifo;
 
+static regex_t mouse_input_regex_1006, mouse_input_regex_1015;
+
+
+void init_mouse_input_regex(void)
+{
+    regcomp(&mouse_input_regex_1006, "^\033\\[<\\([0-9]\\+\\);\\([0-9]\\+\\);\\([0-9]\\+\\)\\([mM]\\)$", 0);
+    regcomp(&mouse_input_regex_1015, "^\033\\[\\([0-9]\\+\\);\\([0-9]\\+\\);\\([0-9]\\+\\)M$", 0);
+}
+
 
 static int hash_eseq(const char *sequence)
 {
@@ -55,22 +64,50 @@ static int read_escape_sequence(void)
             return etl->keycode;
 
 
-    regex_t mouse_input_regex;
-    regcomp(&mouse_input_regex, "^\033\\[<\\([0-9]\\+\\);\\([0-9]\\+\\);\\([0-9]\\+\\)\\([mM]\\)$", 0);
+    int match_type;
 
     regmatch_t matches[5];
-    int result = regexec(&mouse_input_regex, escape_sequence, 5, matches, 0);
-
-    regfree(&mouse_input_regex);
-    if (result)
+    if (!regexec(&mouse_input_regex_1006, escape_sequence, 5, matches, 0))
+        match_type = 1006;
+    else if (!regexec(&mouse_input_regex_1015, escape_sequence, 4, matches, 0))
+        match_type = 1015;
+    else if ((escape_sequence[1] == '[') && (escape_sequence[2] == 'M'))
+        match_type = 1000;
+    else
         return 0;
 
 
-    int button = atoi(&escape_sequence[matches[1].rm_so]);
-    int x      = atoi(&escape_sequence[matches[2].rm_so]);
-    int y      = atoi(&escape_sequence[matches[3].rm_so]);
+    int button = (match_type == 1000) ? escape_sequence[3] : atoi(&escape_sequence[matches[1].rm_so]);
+    int x      = (match_type == 1000) ? escape_sequence[4] : atoi(&escape_sequence[matches[2].rm_so]);
+    int y      = (match_type == 1000) ? escape_sequence[5] : atoi(&escape_sequence[matches[3].rm_so]);
 
-    trigger_event((event_t){ (escape_sequence[matches[4].rm_so] == 'M') ? EVENT_MBUTTON_DOWN : EVENT_MBUTTON_UP, button, .mbutton = { x, y } });
+    int event_type = EVENT_MBUTTON_DOWN;
+
+    if (match_type == 1006)
+        event_type = (escape_sequence[matches[4].rm_so] == 'M') ? EVENT_MBUTTON_DOWN : EVENT_MBUTTON_UP;
+    else if ((match_type == 1015) || (match_type == 1000))
+    {
+        button -= ' ';
+
+        if (match_type == 1000)
+        {
+            x -= ' ';
+            y -= ' ';
+        }
+
+        static int last_down = 0;
+
+        if (button < 3)
+            last_down = button;
+        else if (button == 3)
+        {
+            button = last_down;
+            event_type = EVENT_MBUTTON_UP;
+        }
+    }
+
+
+    trigger_event((event_t){ event_type, button, .mbutton = { x, y } });
 
     return 0;
 }
