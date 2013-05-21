@@ -251,6 +251,11 @@ void buffer_insert(buffer_t *buf, const char *string)
     size_t str_len = nl - string;
 
     buf->lines = realloc(buf->lines, ++buf->line_count * sizeof(*buf->lines));
+    buf->line_screen_pos = realloc(buf->line_screen_pos, buf->line_count * sizeof(*buf->line_screen_pos));
+    // Other corrections to line_screen_pos are not necessary, since that array
+    // needs to be updated anyway (if buf == active_buffer).
+
+    buf->linenr_width = get_decimal_length(buf->line_count);
 
     memmove(&buf->lines[buf->y + 2], &buf->lines[buf->y + 1], (buf->line_count - buf->y - 2) * sizeof(*buf->lines));
 
@@ -258,7 +263,7 @@ void buffer_insert(buffer_t *buf, const char *string)
 
     strcpy(buf->lines[buf->y + 1], &buf->lines[buf->y][ofs]);
 
-    ensure_line_size(&buf->lines[buf->y], ofs + str_len + 1);
+    ensure_line_size(&buf->lines[buf->y], ofs + str_len);
     memcpy(&buf->lines[buf->y][ofs], string, str_len);
     buf->lines[buf->y][ofs + str_len] = 0;
 
@@ -304,6 +309,8 @@ void buffer_delete(buffer_t *buf, int char_count)
 
             free(buf->lines[buf->y + 1]);
             memmove(&buf->lines[buf->y + 1], &buf->lines[buf->y + 2], (--buf->line_count - buf->y - 1) * sizeof(buf->lines[0]));
+
+            buf->linenr_width = get_decimal_length(buf->line_count);
 
             remaining++; // newline
         }
