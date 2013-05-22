@@ -270,8 +270,13 @@ static void command_line(void)
     term_show_cursor(false);
     fflush(stdout);
 
-    if (i)
-        cmd[--i] = 0;
+    if (i <= 0)
+    {
+        reposition_cursor(false);
+        return;
+    }
+
+    cmd[--i] = 0;
 
 
     // FIXME
