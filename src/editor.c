@@ -71,7 +71,7 @@ void reposition_cursor(bool update_desire)
 
         if (old_line >= 0)
         {
-            int old_in_line_x = old_x - 1 - active_buffer->linenr_width - 1;
+            int old_in_line_x = old_x - 1 - active_buffer->linenr_width - 1 + (old_y - active_buffer->line_screen_pos[old_line]) * buffer_width;
             int x = 0;
             old_buf_i = 0;
 

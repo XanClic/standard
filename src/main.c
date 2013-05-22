@@ -43,9 +43,9 @@ int main(int argc, char *argv[])
     }
 
 
-    load_config();
-
     term_init();
+
+    load_config();
 
 
     if (argc < 2)

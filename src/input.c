@@ -107,7 +107,7 @@ static int read_escape_sequence(void)
     }
 
 
-    trigger_event((event_t){ event_type, button, .mbutton = { x, y } });
+    trigger_event((event_t){ event_type, button, .mbutton = { x - 1, y - 1 } });
 
     return 0;
 }
