@@ -20,6 +20,7 @@
 #include "keycodes.h"
 #include "syntax.h"
 #include "term.h"
+#include "utf8.h"
 
 
 int tabstop_width = 8;
@@ -158,12 +159,18 @@ static void unhandled_exception(const char *file, mrb_state *mrbs)
 
 static bool event_call(const event_t *event, void *info)
 {
-    (void)event;
-
     mrb_sym symbol = (mrb_sym)(uintptr_t)info;
 
     // TODO: Allow class/object methods
-    mrb_funcall_argv(gmrbs, mrb_nil_value(), symbol, 0, NULL);
+    if ((event->type == EVENT_NORMAL_KEY) || (event->type == EVENT_INSERT_KEY))
+        mrb_funcall_argv(gmrbs, mrb_nil_value(), symbol, 0, NULL);
+    if ((event->type == EVENT_MBUTTON_DOWN) || (event->type == EVENT_MBUTTON_UP))
+    {
+        mrb_value args[] = { mrb_fixnum_value(event->mbutton.x), mrb_fixnum_value(event->mbutton.y) };
+        mrb_funcall_argv(gmrbs, mrb_nil_value(), symbol, 2, args);
+    }
+    else
+        return false;
 
     if (gmrbs->exc != NULL)
         unhandled_exception("?", gmrbs);
@@ -430,6 +437,59 @@ static mrb_value editor_scroll(mrb_state *mrbs, mrb_value self)
 }
 
 
+static mrb_value get_active_buffer_pos_from_screen(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+
+    mrb_int x, y;
+    mrb_get_args(mrbs, "ii", &x, &y);
+
+    int buf_y = -1;
+
+    for (int line = active_buffer->ys + 1; line <= active_buffer->ye; line++)
+    {
+        if (active_buffer->line_screen_pos[line] > y)
+        {
+            buf_y = line - 1;
+            break;
+        }
+    }
+
+    if (buf_y < 0)
+        buf_y = active_buffer->ye;
+
+
+    int in_line_x = x - 1 - active_buffer->linenr_width - 1 + (y - active_buffer->line_screen_pos[buf_y]) * buffer_width;
+
+
+    int buf_x = 0;
+
+    for (int i = 0, screen_x = 0; (screen_x < in_line_x) && active_buffer->lines[buf_y][i]; i += utf8_mbclen(active_buffer->lines[buf_y][i]), buf_x++)
+    {
+        if (active_buffer->lines[buf_y][i] != '\t')
+            screen_x += utf8_is_dbc(&active_buffer->lines[buf_y][i]) ? 2 : 1;
+        else
+            screen_x += tabstop_width - screen_x % tabstop_width;
+    }
+
+
+    mrb_value ary_vals[] = { mrb_fixnum_value(buf_x), mrb_fixnum_value(buf_y) };
+
+    return mrb_ary_new_from_values(gmrbs, 2, ary_vals);
+}
+
+
+static mrb_value mrb_reposition_cursor(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+
+    int update_desire;
+    mrb_get_args(mrbs, "b", &update_desire);
+    reposition_cursor(update_desire);
+    return mrb_nil_value();
+}
+
+
 void load_config(void)
 {
     FILE *fp = fopen(".stdrc", "r");
@@ -470,6 +530,10 @@ void load_config(void)
         mrb_define_global_const(gmrbs, key_aliases[i].name, mrb_fixnum_value(key_aliases[i].value));
 
 
+    mrb_define_global_const(gmrbs, "BUFFER_WIDTH", mrb_fixnum_value(buffer_width));
+    mrb_define_global_const(gmrbs, "BUFFER_HEIGHT", mrb_fixnum_value(buffer_height));
+
+
     mrb_load_string(gmrbs, "class Fixnum\ndef s\nself & ~0x20\nend\ndef c\nself | 0x800\nend\ndef a\nself | 0x1000\nend\nend\n");
 
 
@@ -486,6 +550,10 @@ void load_config(void)
     mrb_define_method(gmrbs, buflincls, "[]", &buffer_get_line, ARGS_REQ(1));
 
     mrb_define_method(gmrbs, gmrbs->object_class, "scroll", &editor_scroll, ARGS_REQ(1));
+
+
+    mrb_define_method(gmrbs, gmrbs->object_class, "get_active_buffer_pos_from_screen", &get_active_buffer_pos_from_screen, ARGS_REQ(2));
+    mrb_define_method(gmrbs, gmrbs->object_class, "reposition_cursor", &mrb_reposition_cursor, ARGS_REQ(1));
 
 
     mrb_load_file(gmrbs, fp);

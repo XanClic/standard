@@ -34,13 +34,25 @@ nmap RIGHT.c => ":tabnext\n"
 nmap O   => ['i'.bytes, KEND, "\n".bytes].flatten
 nmap O.s => ['i'.bytes, HOME, "\n".bytes, UP].flatten
 
-def wheel_up
+def wheel_up(x, y)
     scroll(-3)
 end
 
-def wheel_down
+def wheel_down(x, y)
     scroll(3)
 end
 
 mbdmap MBUTTON_WHEEL_UP   => :wheel_up
 mbdmap MBUTTON_WHEEL_DOWN => :wheel_down
+
+def mouse_set_cursor(x, y)
+    return if (y <= 0) || (y >= 1 + BUFFER_HEIGHT)
+
+    pos = get_active_buffer_pos_from_screen(x, y)
+    Buffer.active.x = pos[0]
+    Buffer.active.y = pos[1]
+
+    reposition_cursor(true)
+end
+
+mbdmap MBUTTON_LEFT => :mouse_set_cursor
