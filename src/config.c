@@ -374,6 +374,29 @@ static mrb_value get_active_buffer(mrb_state *mrbs, mrb_value self)
     return mrb_obj_value(mrb_data_object_alloc(mrbs, bufcls, active_buffer, &buf_type));
 }
 
+static mrb_value get_buffer_from_tabs_screen_x(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+
+    mrb_int x;
+    mrb_get_args(mrbs, "i", &x);
+
+    buffer_list_t *bfl = buffer_list;
+    for (int cx = 0; bfl != NULL; bfl = bfl->next)
+    {
+        int tab_x_end = cx + 1 + 2 + utf8_strlen_vis(bfl->buffer->name) + 2;
+
+        if (x == cx)
+            return mrb_nil_value(); // Between two tabs
+        else if (x < tab_x_end)
+            return mrb_obj_value(mrb_data_object_alloc(mrbs, bufcls, bfl->buffer, &buf_type));
+
+        cx = tab_x_end;
+    }
+
+    return mrb_nil_value();
+}
+
 static mrb_value buffer_get_x(mrb_state *mrbs, mrb_value self)
 {
     (void)mrbs;
@@ -415,6 +438,14 @@ static mrb_value buffer_del(mrb_state *mrbs, mrb_value self)
     else
         buffer_delete(DATA_PTR(self), chars);
 
+    return mrb_nil_value();
+}
+
+static mrb_value buffer_act(mrb_state *mrbs, mrb_value self)
+{
+    (void)mrbs;
+    active_buffer = DATA_PTR(self);
+    update_active_buffer();
     return mrb_nil_value();
 }
 
@@ -539,12 +570,14 @@ void load_config(void)
 
     bufcls = mrb_define_class(gmrbs, "Buffer", NULL);
     mrb_define_class_method(gmrbs, bufcls, "active", &get_active_buffer, ARGS_NONE());
+    mrb_define_class_method(gmrbs, bufcls, "from_tabs_screen_x", &get_buffer_from_tabs_screen_x, ARGS_REQ(1));
     mrb_define_method(gmrbs, bufcls, "x",  &buffer_get_x, ARGS_NONE());
     mrb_define_method(gmrbs, bufcls, "x=", &buffer_set_x, ARGS_REQ(1));
     mrb_define_method(gmrbs, bufcls, "y",  &buffer_get_y, ARGS_NONE());
     mrb_define_method(gmrbs, bufcls, "y=", &buffer_set_y, ARGS_REQ(1));
     mrb_define_method(gmrbs, bufcls, "lines", &buffer_get_lines, ARGS_NONE());
     mrb_define_method(gmrbs, bufcls, "delete", &buffer_del, ARGS_REQ(1));
+    mrb_define_method(gmrbs, bufcls, "activate", &buffer_act, ARGS_NONE());
 
     buflincls = mrb_define_class(gmrbs, "BufferLines", NULL);
     mrb_define_method(gmrbs, buflincls, "[]", &buffer_get_line, ARGS_REQ(1));
