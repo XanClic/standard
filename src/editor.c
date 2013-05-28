@@ -95,13 +95,6 @@ void reposition_cursor(bool update_desire)
     }
 
 
-    if ((active_buffer->y < active_buffer->ys) || (active_buffer->y > active_buffer->ye))
-    {
-        fflush(stdout);
-        return;
-    }
-
-
     int x = 0, i, j, dbc = 0;
     for (i = j = 0; j < active_buffer->x; i += utf8_mbclen(active_buffer->lines[active_buffer->y][i]), j++)
     {
@@ -118,6 +111,15 @@ void reposition_cursor(bool update_desire)
 
     if (update_desire)
         desired_cursor_x = x + dbc;
+
+
+    // Wait with this test until here, so that desired_cursor_x may be updated
+    if ((active_buffer->y < active_buffer->ys) || (active_buffer->y > active_buffer->ye))
+    {
+        fflush(stdout);
+        return;
+    }
+
 
     x += 1 + active_buffer->linenr_width + 1 + dbc;
 
@@ -144,7 +146,7 @@ void reposition_cursor(bool update_desire)
 }
 
 
-static void ensure_cursor_visibility(void)
+void ensure_cursor_visibility(void)
 {
     if (active_buffer->y < active_buffer->ys)
     {
@@ -435,24 +437,23 @@ void scroll(int lines)
         active_buffer->ys += lines;
         if (active_buffer->ys < 0)
             active_buffer->ys = 0;
-
-        full_redraw(); // update ->ye
     }
     else if (lines > 0)
     {
-        while ((lines > 0) && (active_buffer->ye < active_buffer->line_count - 1))
-        {
-            active_buffer->ys++;
-            lines--;
-
-            full_redraw(); // necessary for ->ye update
-        }
+        active_buffer->ys += lines;
+        if (active_buffer->ys >= active_buffer->line_count)
+            active_buffer->ys = active_buffer->line_count - 1;
     }
+
+    full_redraw();
 }
 
 
 void editor(void)
 {
+    int current_command[64] = { 0 }, cci = 0;
+
+
     full_redraw();
 
 
@@ -464,10 +465,29 @@ void editor(void)
             continue;
 
 
-        if ((input_mode == MODE_NORMAL) && trigger_event((event_t){ EVENT_NORMAL_KEY, inp }))
-            continue;
-        if ((input_mode == MODE_INSERT) && trigger_event((event_t){ EVENT_INSERT_KEY, inp }))
-            continue;
+        switch (input_mode)
+        {
+            case MODE_INSERT:
+                if (trigger_event((event_t){ EVENT_INSERT_KEY, .code = inp }))
+                    continue;
+                break;
+
+            case MODE_NORMAL:
+            {
+                if (cci < 62)
+                    current_command[cci++] = inp;
+
+                if ((cci >= 62) || (inp == '\033') || trigger_event((event_t){ EVENT_NORMAL_KEY_SEQ, .key_seq = current_command }))
+                {
+                    cci = 0;
+                    memset(current_command, 0, sizeof(current_command));
+                    continue;
+                }
+                break;
+            }
+
+            case MODE_REPLACE: break;
+        }
 
 
         if (input_mode == MODE_NORMAL)
@@ -476,14 +496,7 @@ void editor(void)
             {
                 case ':':
                     command_line();
-                    break;
-
-                case 'h': inp = KEY_NSHIFT | KEY_LEFT;   break;
-                case 'l': inp = KEY_NSHIFT | KEY_RIGHT;  break;
-                case 'j': inp = KEY_NSHIFT | KEY_DOWN;   break;
-                case 'k': inp = KEY_NSHIFT | KEY_UP;     break;
-
-                case 'x': inp = KEY_NSHIFT | KEY_DELETE; break;
+                    continue;
 
                 case 'a':
                     // Advancing is always possible, except for when the line is empty
@@ -494,11 +507,12 @@ void editor(void)
                     term_cursor_pos(0, term_height - 1);
                     syntax_region(SYNREG_MODEBAR);
                     print("--- INSERT ---");
+                    reposition_cursor(true);
                     ensure_cursor_visibility();
-                    break;
+                    continue;
             }
         }
-        else if (inp == '\e')
+        else if (inp == '\033')
         {
             term_cursor_pos(0, term_height - 1);
             printf("%-*c", term_width - 2, ' ');
@@ -524,6 +538,9 @@ void editor(void)
 
             write_string(full_mbc);
         }
+
+
+        bool recognized_command = true;
 
         switch (inp)
         {
@@ -585,6 +602,16 @@ void editor(void)
             case KEY_NSHIFT | KEY_DELETE:
                 delete_chars(1);
                 break;
+
+            default:
+                recognized_command = false;
+        }
+
+
+        if (recognized_command)
+        {
+            cci = 0;
+            memset(current_command, 0, sizeof(current_command));
         }
     }
 }

@@ -75,7 +75,9 @@ static const struct
     {  -1, KEY_NSHIFT | KEY_CONTROL | KEY_RIGHT,        "\033[1;5C" },
     {  -1, KEY_NSHIFT | KEY_CONTROL | KEY_UP,           "\033[1;5A" },
     {  -1, KEY_NSHIFT | KEY_CONTROL | KEY_PGDOWN,       "\033[6;5~" },
-    {  -1, KEY_NSHIFT | KEY_CONTROL | KEY_PGUP,         "\033[5;5~" }
+    {  -1, KEY_NSHIFT | KEY_CONTROL | KEY_PGUP,         "\033[5;5~" },
+    {  -1, KEY_NSHIFT | KEY_CONTROL | KEY_HOME,         "\033[1;5H" },
+    {  -1, KEY_NSHIFT | KEY_CONTROL | KEY_END,          "\033[1;5F" }
 };
 
 

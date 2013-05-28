@@ -162,9 +162,9 @@ static bool event_call(const event_t *event, void *info)
     mrb_sym symbol = (mrb_sym)(uintptr_t)info;
 
     // TODO: Allow class/object methods
-    if ((event->type == EVENT_NORMAL_KEY) || (event->type == EVENT_INSERT_KEY))
+    if ((event->type == EVENT_NORMAL_KEY_SEQ) || (event->type == EVENT_INSERT_KEY))
         mrb_funcall_argv(gmrbs, mrb_nil_value(), symbol, 0, NULL);
-    if ((event->type == EVENT_MBUTTON_DOWN) || (event->type == EVENT_MBUTTON_UP))
+    else if ((event->type == EVENT_MBUTTON_DOWN) || (event->type == EVENT_MBUTTON_UP))
     {
         mrb_value args[] = { mrb_fixnum_value(event->mbutton.x), mrb_fixnum_value(event->mbutton.y) };
         mrb_funcall_argv(gmrbs, mrb_nil_value(), symbol, 2, args);
@@ -248,6 +248,26 @@ static mrb_value highlight(mrb_state *mrbs, mrb_value self)
 }
 
 
+static int *mrb_fixnum_ary_to_key_seq(mrb_state *mrbs, mrb_value ary)
+{
+    int len = mrb_ary_len(mrbs, ary);
+    int *vals = malloc(sizeof(*vals) * (len + 1));
+
+    for (int i = 0; i < len; i++)
+    {
+        mrb_value v = mrb_ary_entry(ary, i);
+        if (!mrb_fixnum_p(v))
+            mrb_raise(mrbs, mrbs->object_class, "Array of integers expected");
+
+        vals[i] = mrb_fixnum(v);
+    }
+
+    vals[len] = 0;
+
+    return vals;
+}
+
+
 static void generic_map(mrb_state *mrbs, int event_type)
 {
     mrb_value mappings;
@@ -259,36 +279,52 @@ static void generic_map(mrb_state *mrbs, int event_type)
     mrb_value key;
     while (!mrb_nil_p(key = mrb_ary_shift(mrbs, keys)))
     {
-        if (!mrb_fixnum_p(key))
-            mrb_raise(mrbs, mrbs->object_class, "Integer expected for map");
+        mrb_value key_val = key;
+
+        if (event_type == EVENT_NORMAL_KEY_SEQ)
+        {
+            if (!mrb_string_p(key) && !mrb_array_p(key) && !mrb_fixnum_p(key))
+                mrb_raise(mrbs, mrbs->object_class, "String, integer or array of integers expected for map");
+
+            if (mrb_fixnum_p(key))
+                key_val = mrb_ary_new_from_values(mrbs, 1, &key);
+            else if (mrb_string_p(key))
+                key_val = mrb_funcall(mrbs, key, "bytes", 0);
+        }
+        else
+        {
+            if (!mrb_fixnum_p(key))
+                mrb_raise(mrbs, mrbs->object_class, "Integer expected for map");
+        }
 
         mrb_value target = mrb_hash_get(mrbs, mappings, key);
 
         bool map_func = mrb_symbol_p(target);
+        bool map_int  = mrb_fixnum_p(target);
         bool map_ary  = mrb_array_p(target);
         bool map_str  = mrb_string_p(target);
-        if (!map_func && !map_ary && !map_str)
-            mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol, a string or an array of integers");
+        if (!map_func && !map_int && !map_ary && !map_str)
+            mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol, a string, an integer or an array of integers");
+
+        if (map_int)
+        {
+            map_ary = true;
+            target = mrb_ary_new_from_values(mrbs, 1, &target);
+        }
 
         if (map_func)
-            register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_call, (void *)(uintptr_t)mrb_symbol(target));
+        {
+            if (event_type == EVENT_NORMAL_KEY_SEQ)
+                register_event_handler((event_t){ event_type, .key_seq = mrb_fixnum_ary_to_key_seq(mrbs, key_val) }, event_call, (void *)(uintptr_t)mrb_symbol(target));
+            else
+                register_event_handler((event_t){ event_type, .code = mrb_fixnum(key_val) }, event_call, (void *)(uintptr_t)mrb_symbol(target));
+        }
         else if (map_ary)
         {
-            int len = mrb_ary_len(mrbs, target);
-            int *sim_inp = malloc((len + 1) * sizeof(int));
-
-            for (int i = 0; i < len; i++)
-            {
-                mrb_value v = mrb_ary_entry(target, i);
-                if (!mrb_fixnum_p(v))
-                    mrb_raise(mrbs, mrbs->object_class, "Must map onto a symbol, a string or an array of integers");
-
-                sim_inp[i] = mrb_fixnum(v);
-            }
-
-            sim_inp[len] = 0;
-
-            register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_input, sim_inp);
+            if (event_type == EVENT_NORMAL_KEY_SEQ)
+                register_event_handler((event_t){ event_type, .key_seq = mrb_fixnum_ary_to_key_seq(mrbs, key_val) }, event_input, mrb_fixnum_ary_to_key_seq(mrbs, target));
+            else
+                register_event_handler((event_t){ event_type, .code = mrb_fixnum(key_val) }, event_input, mrb_fixnum_ary_to_key_seq(mrbs, target));
         }
         else // if (map_str)
         {
@@ -300,7 +336,10 @@ static void generic_map(mrb_state *mrbs, int event_type)
                 sim_inp[i] = ptr[i];
             sim_inp[len] = 0;
 
-            register_event_handler((event_t){ event_type, mrb_fixnum(key) }, event_input, sim_inp);
+            if (event_type == EVENT_NORMAL_KEY_SEQ)
+                register_event_handler((event_t){ event_type, .key_seq = mrb_fixnum_ary_to_key_seq(mrbs, key_val) }, event_input, sim_inp);
+            else
+                register_event_handler((event_t){ event_type, .code = mrb_fixnum(key_val) }, event_input, sim_inp);
         }
     }
 }
@@ -308,7 +347,7 @@ static void generic_map(mrb_state *mrbs, int event_type)
 static mrb_value nmap(mrb_state *mrbs, mrb_value self)
 {
     (void)self;
-    generic_map(mrbs, EVENT_NORMAL_KEY);
+    generic_map(mrbs, EVENT_NORMAL_KEY_SEQ);
     return mrb_nil_value();
 }
 
@@ -456,6 +495,12 @@ static mrb_value buffer_get_line(mrb_state *mrbs, mrb_value self)
     return mrb_str_new_cstr(mrbs, ((buffer_t *)DATA_PTR(self))->lines[line]);
 }
 
+static mrb_value buffer_line_count(mrb_state *mrbs, mrb_value self)
+{
+    (void)mrbs;
+    return mrb_fixnum_value(((buffer_t *)DATA_PTR(self))->line_count);
+}
+
 
 static mrb_value editor_scroll(mrb_state *mrbs, mrb_value self)
 {
@@ -521,6 +566,15 @@ static mrb_value mrb_reposition_cursor(mrb_state *mrbs, mrb_value self)
 }
 
 
+static mrb_value mrb_ensure_cursor_visibility(mrb_state *mrbs, mrb_value self)
+{
+    (void)mrbs;
+    (void)self;
+    ensure_cursor_visibility();
+    return mrb_nil_value();
+}
+
+
 void load_config(void)
 {
     FILE *fp = fopen(".stdrc", "r");
@@ -548,6 +602,8 @@ void load_config(void)
     mrb_define_method(gmrbs, gmrbs->object_class, "highlight", &highlight, ARGS_REQ(1));
     mrb_define_alias(gmrbs, gmrbs->object_class, "hi", "highlight");
 
+
+    mrb_load_string(gmrbs, "def map hash\nnmap hash\nimap hash\nend\n");
 
     mrb_define_method(gmrbs, gmrbs->object_class, "nmap", &nmap, ARGS_REQ(1));
     mrb_define_method(gmrbs, gmrbs->object_class, "imap", &imap, ARGS_REQ(1));
@@ -581,12 +637,15 @@ void load_config(void)
 
     buflincls = mrb_define_class(gmrbs, "BufferLines", NULL);
     mrb_define_method(gmrbs, buflincls, "[]", &buffer_get_line, ARGS_REQ(1));
+    mrb_define_method(gmrbs, buflincls, "length", &buffer_line_count, ARGS_NONE());
+    mrb_define_alias(gmrbs, buflincls, "size", "length");
 
     mrb_define_method(gmrbs, gmrbs->object_class, "scroll", &editor_scroll, ARGS_REQ(1));
 
 
     mrb_define_method(gmrbs, gmrbs->object_class, "get_active_buffer_pos_from_screen", &get_active_buffer_pos_from_screen, ARGS_REQ(2));
     mrb_define_method(gmrbs, gmrbs->object_class, "reposition_cursor", &mrb_reposition_cursor, ARGS_REQ(1));
+    mrb_define_method(gmrbs, gmrbs->object_class, "ensure_cursor_visibility", &mrb_ensure_cursor_visibility, ARGS_NONE());
 
 
     mrb_load_file(gmrbs, fp);
