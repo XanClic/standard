@@ -44,7 +44,9 @@ static const char *syntax_names[SYNREG_COUNT] = {
     "placeholder_empty",
     "placeholder_line",
     "statusbar",
-    "modebar"
+    "modebar",
+    "normal_command_completed",
+    "normal_command_typing"
 };
 
 static const struct

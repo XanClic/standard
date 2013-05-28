@@ -449,11 +449,80 @@ void scroll(int lines)
 }
 
 
+static int current_command[64], cci;
+
+static void print_current_command(bool completed)
+{
+    term_cursor_pos(0, term_height - 1);
+    syntax_region(SYNREG_DEFAULT);
+    printf("%*c", term_width - 1, ' ');
+    term_cursor_pos(0, term_height - 1);
+
+    syntax_region(completed ? SYNREG_NORMAL_COMMAND_COMPLETED : SYNREG_NORMAL_COMMAND_TYPING);
+
+    for (int i = 0; i < cci; i++)
+    {
+        if ((current_command[i] < 0x100) && (current_command[i] != KEY_BACKSPACE))
+            putchar(current_command[i]);
+        else
+        {
+            putchar('<');
+
+            int c = current_command[i];
+
+            if (c & KEY_CONTROL)
+                print("C-");
+            if (c & KEY_ALT)
+                print("A-");
+            if (!(c & KEY_NSHIFT))
+                print("S-");
+
+            c &= ~(KEY_CONTROL | KEY_ALT | KEY_NSHIFT);
+
+            if ((c < 0x100) && (c != KEY_BACKSPACE))
+                putchar(c);
+            else
+            {
+                switch (c)
+                {
+                    case KEY_CAPSLOCK:   print("Caps");   break;
+                    case KEY_NUMLOCK:    print("Num");    break;
+                    case KEY_SCROLLLOCK: print("Scroll"); break;
+                    case KEY_DELETE:     print("Del");    break;
+                    case KEY_INSERT:     print("Ins");    break;
+                    case KEY_HOME:       print("Home");   break;
+                    case KEY_END:        print("End");    break;
+                    case KEY_UP:         print("Up");     break;
+                    case KEY_DOWN:       print("Down");   break;
+                    case KEY_LEFT:       print("Left");   break;
+                    case KEY_RIGHT:      print("Right");  break;
+                    case KEY_PGUP:       print("PgUp");   break;
+                    case KEY_PGDOWN:     print("PgDown"); break;
+                    case KEY_BACKSPACE:  print("BS");     break;
+                    default:
+                        if ((c >= KEY_F1) && (c <= KEY_F12))
+                            printf("F%i", c - KEY_F1 + 1);
+                        else
+                            print("?");
+                }
+            }
+
+            putchar('>');
+        }
+    }
+
+    reposition_cursor(false);
+}
+
+static void clear_current_command(void)
+{
+    cci = 0;
+    memset(current_command, 0, sizeof(current_command));
+}
+
+
 void editor(void)
 {
-    int current_command[64] = { 0 }, cci = 0;
-
-
     full_redraw();
 
 
@@ -474,15 +543,25 @@ void editor(void)
 
             case MODE_NORMAL:
             {
-                if (cci < 62)
+                if ((cci >= 62) || (inp == '\033'))
+                {
+                    clear_current_command();
+                    print_current_command(false);
+                }
+                else
+                {
                     current_command[cci++] = inp;
 
-                if ((cci >= 62) || (inp == '\033') || trigger_event((event_t){ EVENT_NORMAL_KEY_SEQ, .key_seq = current_command }))
-                {
-                    cci = 0;
-                    memset(current_command, 0, sizeof(current_command));
-                    continue;
+                    if (!trigger_event((event_t){ EVENT_NORMAL_KEY_SEQ, .key_seq = current_command }))
+                        print_current_command(false);
+                    else
+                    {
+                        print_current_command(true);
+                        clear_current_command();
+                        continue;
+                    }
                 }
+
                 break;
             }
 
@@ -610,8 +689,8 @@ void editor(void)
 
         if (recognized_command)
         {
-            cci = 0;
-            memset(current_command, 0, sizeof(current_command));
+            print_current_command(true);
+            clear_current_command();
         }
     }
 }
@@ -721,7 +800,7 @@ void full_redraw(void)
     }
 
 
-    reposition_cursor(false);
+    print_current_command(true); // if it wasn't complete, there would be no reason to redraw everything
 }
 
 
