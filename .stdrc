@@ -14,6 +14,9 @@ hi statusbar bold
 hi placeholder_empty termfg: 4
 hi placeholder_line termfg: 3
 
+hi normal_command_typing bold
+
+
 def backspace_pressed
     if Buffer.active.x > 0
         i [LEFT, DEL]
