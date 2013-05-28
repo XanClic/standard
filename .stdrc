@@ -27,20 +27,59 @@ end
 nmap BS => LEFT
 imap BS => :backspace_pressed
 
+
+def delete_rest_of_line
+    Buffer.active.delete(Buffer.active.lines[Buffer.active.y].length - Buffer.active.x)
+end
+
+def delete_line
+    Buffer.active.x = 0
+    Buffer.active.delete(Buffer.active.lines[Buffer.active.y].length + 1)
+end
+
+def delete_word
+    line = Buffer.active.lines[Buffer.active.y]
+    word_len = 0
+
+    x = Buffer.active.x
+    while line[x] && line[x].word?
+        x += 1
+        word_len += 1
+    end
+
+    word_len += 1 if line[x] && (line[x].space? || (word_len == 0))
+
+    Buffer.active.delete(word_len)
+end
+
+nmap X => DEL
+nmap 'd$' => :delete_rest_of_line
+nmap 'dd' => :delete_line
+nmap 'dw' => :delete_word
+
+
 nmap H => LEFT
 nmap L => RIGHT
 nmap J => DOWN
 nmap K => UP
 
-nmap X => DEL
+
+nmap O   => [I, KEND, "\n".bytes].flatten
+nmap O.s => [I, HOME, "\n".bytes, UP].flatten
+nmap A.s => [KEND, A]
+nmap S   => [DEL, I]
+nmap C.s => 'd$a'
+nmap 'c$' => 'd$a'
+nmap 'cw' => 'dwi'
+
+
+nmap J.s => [KEND, A, 32, DEL, 27]
+
 
 nmap T.c     => ":tabnew\n"
 nmap W.c     => ":q\n"
 nmap LEFT.c  => ":tabprevious\n"
 nmap RIGHT.c => ":tabnext\n"
-
-nmap O   => ['i'.bytes, KEND, "\n".bytes].flatten
-nmap O.s => ['i'.bytes, HOME, "\n".bytes, UP].flatten
 
 
 def to_top

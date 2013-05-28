@@ -575,6 +575,12 @@ static mrb_value mrb_ensure_cursor_visibility(mrb_state *mrbs, mrb_value self)
 }
 
 
+static mrb_value mrb_strlen(mrb_state *mrbs, mrb_value self)
+{
+    return mrb_fixnum_value(utf8_strlen(mrb_string_value_cstr(mrbs, &self)));
+}
+
+
 void load_config(void)
 {
     FILE *fp = fopen(".stdrc", "r");
@@ -596,14 +602,19 @@ void load_config(void)
         mrb_load_string(gmrbs, definition);
     }
 
-    mrb_load_string(gmrbs, "def bold\n{bold: true}\nend\n");
-    mrb_load_string(gmrbs, "def underline\n{underline: true}\nend\n");
+    FILE *mpfp = fopen(".stdrc.patches", "r");
+    if (mpfp)
+    {
+        mrb_load_file(gmrbs, mpfp);
+        fclose(mpfp);
+
+        if (gmrbs->exc != NULL)
+            unhandled_exception(".stdrc.patches", gmrbs);
+    }
 
     mrb_define_method(gmrbs, gmrbs->object_class, "highlight", &highlight, ARGS_REQ(1));
     mrb_define_alias(gmrbs, gmrbs->object_class, "hi", "highlight");
 
-
-    mrb_load_string(gmrbs, "def map hash\nnmap hash\nimap hash\nend\n");
 
     mrb_define_method(gmrbs, gmrbs->object_class, "nmap", &nmap, ARGS_REQ(1));
     mrb_define_method(gmrbs, gmrbs->object_class, "imap", &imap, ARGS_REQ(1));
@@ -619,9 +630,6 @@ void load_config(void)
 
     mrb_define_global_const(gmrbs, "BUFFER_WIDTH", mrb_fixnum_value(buffer_width));
     mrb_define_global_const(gmrbs, "BUFFER_HEIGHT", mrb_fixnum_value(buffer_height));
-
-
-    mrb_load_string(gmrbs, "class Fixnum\ndef s\nself & ~0x20\nend\ndef c\nself | 0x800\nend\ndef a\nself | 0x1000\nend\nend\n");
 
 
     bufcls = mrb_define_class(gmrbs, "Buffer", NULL);
@@ -646,6 +654,11 @@ void load_config(void)
     mrb_define_method(gmrbs, gmrbs->object_class, "get_active_buffer_pos_from_screen", &get_active_buffer_pos_from_screen, ARGS_REQ(2));
     mrb_define_method(gmrbs, gmrbs->object_class, "reposition_cursor", &mrb_reposition_cursor, ARGS_REQ(1));
     mrb_define_method(gmrbs, gmrbs->object_class, "ensure_cursor_visibility", &mrb_ensure_cursor_visibility, ARGS_NONE());
+
+
+    struct RClass *strcls = mrb_class_get(gmrbs, "String");
+    mrb_define_method(gmrbs, strcls, "length", &mrb_strlen, ARGS_NONE());
+    mrb_define_alias(gmrbs, strcls, "size", "length");
 
 
     mrb_load_file(gmrbs, fp);
