@@ -6,7 +6,7 @@
 
 typedef enum event_type
 {
-    EVENT_NORMAL_KEY,
+    EVENT_NORMAL_KEY_SEQ,
     EVENT_INSERT_KEY,
     EVENT_MBUTTON_DOWN,
     EVENT_MBUTTON_UP
@@ -15,8 +15,13 @@ typedef enum event_type
 typedef struct event
 {
     event_type_t type;
+
     // Primary code for registering handlers
-    int code;
+    union
+    {
+        const int *key_seq;
+        int code;
+    };
 
     // Supplementary information
     // union

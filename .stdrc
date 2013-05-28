@@ -24,15 +24,61 @@ def backspace_pressed
     end
 end
 
-nmap BS => [LEFT]
+nmap BS => LEFT
 imap BS => :backspace_pressed
 
+nmap H => LEFT
+nmap L => RIGHT
+nmap J => DOWN
+nmap K => UP
+
+nmap X => DEL
+
 nmap T.c     => ":tabnew\n"
+nmap W.c     => ":q\n"
 nmap LEFT.c  => ":tabprevious\n"
 nmap RIGHT.c => ":tabnext\n"
 
 nmap O   => ['i'.bytes, KEND, "\n".bytes].flatten
 nmap O.s => ['i'.bytes, HOME, "\n".bytes, UP].flatten
+
+
+def to_top
+    Buffer.active.x = 0
+    Buffer.active.y = 0
+
+    reposition_cursor(true)
+    ensure_cursor_visibility
+end
+
+def to_bottom
+    Buffer.active.x = 0
+    Buffer.active.y = Buffer.active.lines.length - 1
+
+    reposition_cursor(true)
+    ensure_cursor_visibility
+end
+
+nmap 'gg' => :to_top
+nmap G.s  => :to_bottom
+
+map HOME.c => :to_top
+map KEND.c => :to_bottom
+
+
+def page_down
+    # FIXME: This scrolls too far if there are overly long lines
+    scroll(BUFFER_HEIGHT)
+end
+
+def page_up
+    # FIXME: Same applies here
+    scroll(-BUFFER_HEIGHT)
+end
+
+map PAGEDOWN => :page_down
+map PAGEUP   => :page_up
+
 
 def wheel_up(x, y)
     scroll(-3)
