@@ -1,0 +1,76 @@
+def bold
+    {bold: true}
+end
+
+def underline
+    {underline: true}
+end
+
+
+def map hash
+    nmap hash
+    imap hash
+end
+
+
+class Fixnum
+    def s # shifted
+        self & ~0x20
+    end
+
+    def c # control pressed
+        self | 0x800
+    end
+
+    def a # alt pressed
+        self | 0x1000
+    end
+end
+
+
+class String
+    def codepoints
+        cp = []
+        b = bytes
+        i = 0
+
+        while b[i]
+            if (b[i] & 0x80) == 0
+                cp << b[i]
+                i += 1
+            elsif (b[i] & 0xe0) == 0xc0
+                cp << ((b[i] & ~0xe0) << 6) | (b[i + 1] & ~0xc0)
+                i += 2
+            elsif (b[i] & 0xf0) == 0xe0
+                cp << ((b[i] & ~0xe0) << 12) | ((b[i + 1] & ~0xc0) << 6) | (b[i + 2] & ~0xc0)
+                i += 3
+            elsif (b[i] & 0xf8) == 0xf0
+                cp << ((b[i] & ~0xf0) << 18) | ((b[i + 1] & ~0xc0) << 12) | ((b[i + 2] & ~0xc0) << 6) | (b[i + 3] & ~0xc0)
+                i += 4
+            else
+                cp << b[i]
+                i += 1
+            end
+        end
+
+        return cp
+    end
+
+    def each_codepoint
+        if block_given?
+            codepoints.each do |cp|
+                yield cp
+            end
+        else
+            codepoints.each
+        end
+    end
+
+    def word?
+        (codepoints & "\t\r\n\f !\"\#$%&'()*+,-./:;<=>?@[\\]^`{|}~".bytes).empty?
+    end
+
+    def space?
+        !(codepoints & "\t\r\n\f ".bytes).empty?
+    end
+end
