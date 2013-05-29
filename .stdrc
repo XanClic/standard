@@ -50,15 +50,144 @@ def delete_word
         word_len += 1
     end
 
-    word_len += 1 if line[x] && (line[x].space? || (word_len == 0))
+    while line[x] && line[x].space?
+        x += 1
+        word_len += 1
+    end
+
+    word_len = 1 if word_len == 0
 
     Buffer.active.delete(word_len)
+end
+
+BRACKETS = [['(', ')'], ['[', ']'], ['{', '}'], ['<', '>']].map do |p|
+    [p[0].codepoints[0], p[1].codepoints[0]]
+end
+
+def get_inside_range_brackets(iow, start) # iow == inside of what
+    pair = BRACKETS.select do |p|
+        (p[0] == iow) || (p[1] == iow)
+    end
+
+    return nil unless pair[0]
+
+    s = pair[0][0]
+    e = pair[0][1]
+
+    line = Buffer.active.lines[Buffer.active.y].codepoints
+
+
+    spos = line[start] == e ? start - 1 : start
+    counter = 0
+
+    while spos >= 0
+        if line[spos] == s
+            if counter == 0
+                break
+            else
+                counter -= 1
+            end
+        elsif line[spos] == e
+            counter += 1
+        end
+
+        spos -= 1
+    end
+
+    return nil unless spos >= 0
+
+
+    epos = start
+    counter = 0
+
+    while line[epos]
+        if line[epos] == e
+            if counter == 0
+                break
+            else
+                counter -= 1
+            end
+        elsif line[epos] == s
+            counter += 1
+        end
+
+        epos += 1
+    end
+
+    return nil unless line[epos]
+
+    return [spos, epos]
+end
+
+def get_inside_range(iow)
+    start = Buffer.active.x
+    line  = Buffer.active.lines[Buffer.active.y].codepoints
+    len   = line.length
+
+    if BRACKETS.flatten.include?(iow)
+        while start < len
+            r = get_inside_range_brackets(iow, start)
+            return r if r
+
+            start += 1
+        end
+
+        start = Buffer.active.x - 1
+        while start >= 0
+            r = get_inside_range_brackets(iow, start)
+            return r if r
+
+            start -= 1
+        end
+    else
+        l = line[0, start].rindex(iow)
+        r = line[start, len - start].find_index(iow)
+
+        if l && r
+            return [l, r + start]
+        elsif l
+            r = l
+            l = line[0, r].rindex(iow)
+            return l ? [l, r] : nil
+        elsif r
+            l = r + start
+            r = line[l + 1, len - l - 1].find_index(iow)
+            return r ? [l, r + l + 1] : nil
+        else
+            return nil
+        end
+    end
+
+    return nil
+end
+
+def delete_inside
+    r = get_inside_range(getc)
+    return unless r
+
+    Buffer.active.x = r[0] + 1
+    Buffer.active.delete(r[1] - r[0] - 1) unless r[1] == r[0] + 1
+end
+
+def get_forward_distance(chr)
+    line = Buffer.active.lines[Buffer.active.y].codepoints
+    x = Buffer.active.x
+    return line[x, line.length - x].find_index(chr)
+end
+
+def delete_until
+    d = get_forward_distance(getc)
+    return unless d
+
+    Buffer.active.delete(d) if d > 0
 end
 
 nmap X => DEL
 nmap 'd$' => :delete_rest_of_line
 nmap 'dd' => :delete_line
 nmap 'dw' => :delete_word
+nmap 'di' => :delete_inside
+nmap 'dt' => :delete_until
 
 
 nmap H => LEFT
@@ -67,6 +196,23 @@ nmap J => DOWN
 nmap K => UP
 
 
+def change_inside
+    r = get_inside_range(getc)
+    return unless r
+
+    Buffer.active.x = r[0] + 1
+    Buffer.active.delete(r[1] - r[0] - 1) unless r[1] == r[0] + 1
+    i [I]
+end
+
+def change_until
+    d = get_forward_distance(getc)
+    return unless d
+
+    Buffer.active.delete(d) if d > 0
+    i [I] # There is always a character behind the current one (being the one got through getc)
+end
+
 nmap O   => [I, KEND, "\n".bytes].flatten
 nmap O.s => [I, HOME, "\n".bytes, UP].flatten
 nmap A.s => [KEND, A]
@@ -74,6 +220,16 @@ nmap S   => [DEL, I]
 nmap C.s => 'd$a'
 nmap 'c$' => 'd$a'
 nmap 'cw' => 'dwi'
+nmap 'ci' => :change_inside
+nmap 'ct' => :change_until
+
+
+def replace_single_char
+    return if Buffer.active.lines[Buffer.active.y].empty?
+    i [A, BS, getc, 27]
+end
+
+nmap R => :replace_single_char
 
 
 nmap J.s => [KEND, A, 32, DEL, 27]

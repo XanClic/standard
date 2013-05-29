@@ -398,6 +398,14 @@ static mrb_value input(mrb_state *mrbs, mrb_value self)
 }
 
 
+static mrb_value mrb_getc(mrb_state *mrbs, mrb_value self)
+{
+    (void)self;
+    (void)mrbs;
+    return mrb_fixnum_value(input_read());
+}
+
+
 static void nop_free(mrb_state *mrbs, void *ptr)
 {
     (void)mrbs;
@@ -625,6 +633,7 @@ void load_config(void)
 
     mrb_define_method(gmrbs, gmrbs->object_class, "input", &input, ARGS_REQ(1));
     mrb_define_alias(gmrbs, gmrbs->object_class, "i", "input");
+    mrb_define_method(gmrbs, gmrbs->object_class, "getc", &mrb_getc, ARGS_NONE());
 
     for (int i = 0; i < (int)(sizeof(key_aliases) / sizeof(key_aliases[0])); i++)
         mrb_define_global_const(gmrbs, key_aliases[i].name, mrb_fixnum_value(key_aliases[i].value));

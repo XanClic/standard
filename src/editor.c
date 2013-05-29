@@ -551,10 +551,9 @@ void editor(void)
                 else
                 {
                     current_command[cci++] = inp;
+                    print_current_command(false);
 
-                    if (!trigger_event((event_t){ EVENT_NORMAL_KEY_SEQ, .key_seq = current_command }))
-                        print_current_command(false);
-                    else
+                    if (trigger_event((event_t){ EVENT_NORMAL_KEY_SEQ, .key_seq = current_command }))
                     {
                         print_current_command(true);
                         clear_current_command();
@@ -571,24 +570,29 @@ void editor(void)
 
         if (input_mode == MODE_NORMAL)
         {
-            switch (inp)
+            if (cci == 1)
             {
-                case ':':
-                    command_line();
-                    continue;
+                switch (inp)
+                {
+                    case ':':
+                        clear_current_command();
+                        command_line();
+                        continue;
 
-                case 'a':
-                    // Advancing is always possible, except for when the line is empty
-                    if (active_buffer->lines[active_buffer->y][0])
-                        active_buffer->x++;
-                case 'i':
-                    input_mode = MODE_INSERT;
-                    term_cursor_pos(0, term_height - 1);
-                    syntax_region(SYNREG_MODEBAR);
-                    print("--- INSERT ---");
-                    reposition_cursor(true);
-                    ensure_cursor_visibility();
-                    continue;
+                    case 'a':
+                        // Advancing is always possible, except for when the line is empty
+                        if (active_buffer->lines[active_buffer->y][0])
+                            active_buffer->x++;
+                    case 'i':
+                        clear_current_command();
+                        input_mode = MODE_INSERT;
+                        term_cursor_pos(0, term_height - 1);
+                        syntax_region(SYNREG_MODEBAR);
+                        print("--- INSERT ---");
+                        reposition_cursor(true);
+                        ensure_cursor_visibility();
+                        continue;
+                }
             }
         }
         else if (inp == '\033')
@@ -619,78 +623,82 @@ void editor(void)
         }
 
 
-        bool recognized_command = true;
-
-        switch (inp)
+        if (cci == 1)
         {
-            case KEY_NSHIFT | KEY_LEFT:
-                if (active_buffer->x)
-                    active_buffer->x--;
-                reposition_cursor(true);
-                ensure_cursor_visibility();
-                break;
-
-            case KEY_NSHIFT | KEY_RIGHT:
-                if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - (input_mode != MODE_INSERT))
-                    active_buffer->x++;
-                reposition_cursor(true);
-                ensure_cursor_visibility();
-                break;
-
-            case KEY_NSHIFT | KEY_DOWN:
-                if (active_buffer->y < active_buffer->line_count - 1)
-                    active_buffer->y++;
-                if (active_buffer->y > active_buffer->ye)
-                {
-                    int screen_lines_required = slr(active_buffer, active_buffer->y) - active_buffer->oll_unused_lines;
-                    while (screen_lines_required > 0)
-                        screen_lines_required -= slr(active_buffer, active_buffer->ys++);
-                    full_redraw();
-                }
-                line_change_update_x();
-                reposition_cursor(false);
-                ensure_cursor_visibility();
-                break;
-
-            case KEY_NSHIFT | KEY_UP:
-                if (active_buffer->y > 0)
-                    active_buffer->y--;
-                line_change_update_x();
-                if (active_buffer->y < active_buffer->ys)
-                {
-                    active_buffer->ys = active_buffer->y;
-                    full_redraw();
-                }
-                reposition_cursor(false);
-                ensure_cursor_visibility();
-                break;
-
-            case KEY_NSHIFT | KEY_END:
-                desired_cursor_x = -1;
-                line_change_update_x();
-                reposition_cursor(false);
-                ensure_cursor_visibility();
-                break;
-
-            case KEY_NSHIFT | KEY_HOME:
-                active_buffer->x = 0;
-                reposition_cursor(true);
-                ensure_cursor_visibility();
-                break;
-
-            case KEY_NSHIFT | KEY_DELETE:
-                delete_chars(1);
-                break;
-
-            default:
-                recognized_command = false;
-        }
+            bool recognized_command = true;
 
 
-        if (recognized_command)
-        {
-            print_current_command(true);
-            clear_current_command();
+            switch (inp)
+            {
+                case KEY_NSHIFT | KEY_LEFT:
+                    if (active_buffer->x)
+                        active_buffer->x--;
+                    reposition_cursor(true);
+                    ensure_cursor_visibility();
+                    break;
+
+                case KEY_NSHIFT | KEY_RIGHT:
+                    if (active_buffer->x < (int)utf8_strlen(active_buffer->lines[active_buffer->y]) - (input_mode != MODE_INSERT))
+                        active_buffer->x++;
+                    reposition_cursor(true);
+                    ensure_cursor_visibility();
+                    break;
+
+                case KEY_NSHIFT | KEY_DOWN:
+                    if (active_buffer->y < active_buffer->line_count - 1)
+                        active_buffer->y++;
+                    if (active_buffer->y > active_buffer->ye)
+                    {
+                        int screen_lines_required = slr(active_buffer, active_buffer->y) - active_buffer->oll_unused_lines;
+                        while (screen_lines_required > 0)
+                            screen_lines_required -= slr(active_buffer, active_buffer->ys++);
+                        full_redraw();
+                    }
+                    line_change_update_x();
+                    reposition_cursor(false);
+                    ensure_cursor_visibility();
+                    break;
+
+                case KEY_NSHIFT | KEY_UP:
+                    if (active_buffer->y > 0)
+                        active_buffer->y--;
+                    line_change_update_x();
+                    if (active_buffer->y < active_buffer->ys)
+                    {
+                        active_buffer->ys = active_buffer->y;
+                        full_redraw();
+                    }
+                    reposition_cursor(false);
+                    ensure_cursor_visibility();
+                    break;
+
+                case KEY_NSHIFT | KEY_END:
+                    desired_cursor_x = -1;
+                    line_change_update_x();
+                    reposition_cursor(false);
+                    ensure_cursor_visibility();
+                    break;
+
+                case KEY_NSHIFT | KEY_HOME:
+                    active_buffer->x = 0;
+                    reposition_cursor(true);
+                    ensure_cursor_visibility();
+                    break;
+
+                case KEY_NSHIFT | KEY_DELETE:
+                    delete_chars(1);
+                    break;
+
+                default:
+                    recognized_command = false;
+            }
+
+
+            if (recognized_command)
+            {
+                print_current_command(true);
+                clear_current_command();
+            }
         }
     }
 }
