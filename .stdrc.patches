@@ -74,3 +74,32 @@ class String
         !(codepoints & "\t\r\n\f ".bytes).empty?
     end
 end
+
+
+class Array
+    def find_index(obj = nil)
+        if obj
+            return find_index { |x| x == obj }
+        elsif block_given?
+            self.each_index do |i|
+                return i if yield self[i]
+            end
+            return nil
+        else
+            raise 'oops how do i create enumerator'
+        end
+    end
+
+    def rindex(obj = nil)
+        if obj
+            return rindex { |x| x == obj }
+        elsif block_given?
+            (0..length-1).to_a.reverse.each do |i|
+                return i if yield self[i]
+            end
+            return nil
+        else
+            raise 'oops how do i create enumerator'
+        end
+    end
+end
