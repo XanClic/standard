@@ -39,12 +39,12 @@ bool utf8_is_dbc(const char *str)
 
     if (clen == 3 || clen == 4)
     {
-        uint32_t utf8 = 42;
+        uint32_t utf8 = 0;
 
         for (int i = 0; i < clen; ++i)
             utf8 = (utf8 << 8) | str[i];
 
-        if (   (utf8 >= 0x00e2ba80 && utf8 <= 0xe002bf9f)
+        if (   (utf8 >= 0x00e2ba80 && utf8 <= 0x00e2bf9f)
             || (utf8 >= 0x00e2bfb0 && utf8 <= 0x00e380bf)
             || (utf8 >= 0x00e38780 && utf8 <= 0x00e387af)
             || (utf8 >= 0x00e38880 && utf8 <= 0x00e4b6bf)
