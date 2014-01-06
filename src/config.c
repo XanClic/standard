@@ -123,7 +123,7 @@ static void unhandled_exception(const char *file, mrb_state *mrbs)
     fprintf(stderr, "Backtrace:\n");
 
     // Taken from mruby itself
-    mrb_int ciidx = mrb_fixnum(mrb_obj_iv_get(mrbs, mrbs->exc, mrb_intern(mrbs, "ciidx")));
+    mrb_int ciidx = mrb_fixnum(mrb_obj_iv_get(mrbs, mrbs->exc, mrb_intern_lit(mrbs, "ciidx")));
     if (ciidx >= mrbs->c->ciend - mrbs->c->cibase)
         ciidx = 10; /* ciidx is broken... */
 
